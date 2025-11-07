@@ -107,7 +107,7 @@ app.get('/api/user/role/:id', async (req, res) => {
   }
 })
 
-// Create staff user with auto-confirmation
+// Create staff user with Supabase Auth (email auto-confirmed)
 app.post('/api/users/create', async (req, res) => {
   try {
     const { name, username, password } = req.body
@@ -116,14 +116,14 @@ app.post('/api/users/create', async (req, res) => {
       return res.status(400).json({ error: 'Name, username, and password are required' })
     }
     
-    // Format email from username
+    // Format email from username for Supabase Auth (required by Supabase)
     const email = `${username}@gymcore.com`
     
-    // Create user using admin API with email_confirmed set to true
+    // Create user using Supabase Admin API with email auto-confirmed
     const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
       email: email,
       password: password,
-      email_confirm: true, // Auto-confirm email
+      email_confirm: true, // Auto-confirm email so user can login immediately
       user_metadata: {
         name: name,
         username: username
@@ -157,7 +157,12 @@ app.post('/api/users/create', async (req, res) => {
     
     res.json({ 
       success: true, 
-      user: authUser.user,
+      user: {
+        id: authUser.user.id,
+        name: name,
+        username: username,
+        role: 'staff'
+      },
       message: 'Staff member created successfully and can login immediately'
     })
   } catch (error) {

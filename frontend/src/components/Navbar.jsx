@@ -50,7 +50,7 @@ function Sidebar({ user, onCollapseChange }) {
         await supabase.auth.signOut()
       }
       
-      // Clear localStorage first
+      // Clear localStorage
       localStorage.removeItem('gymcore_user')
       localStorage.removeItem('gymcore_is_admin')
       

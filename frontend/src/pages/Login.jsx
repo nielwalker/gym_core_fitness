@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Container, Card, Form, Button, Alert } from 'react-bootstrap'
-import { supabase } from '../lib/supabase'
 import { useNavigate } from 'react-router-dom'
 import { checkHardcodedAdmin } from '../lib/auth'
+import { supabase } from '../lib/supabase'
 
 function Login() {
   const [username, setUsername] = useState('')
@@ -30,7 +30,7 @@ function Login() {
       }
 
       // If not admin, try Supabase authentication
-      // Check if username already contains @ (is an email), otherwise append @gymcore.com
+      // Format: username@gymcore.com (email is required by Supabase but hidden from user)
       const emailForAuth = username.includes('@') ? username : `${username}@gymcore.com`
       
       const { data, error: authError } = await supabase.auth.signInWithPassword({
@@ -45,7 +45,7 @@ function Login() {
         } else if (authError.message.includes('Invalid login credentials')) {
           setError('Invalid username or password')
         } else {
-          throw authError
+          setError(authError.message || 'Login failed')
         }
         return
       }
@@ -57,12 +57,9 @@ function Login() {
         navigate('/dashboard')
       }
     } catch (err) {
-      // Handle other errors
-      if (err.message && err.message.includes('Email not confirmed')) {
-        setError('Email not confirmed. Please contact an administrator to activate your account.')
-      } else {
-        setError(err.message || 'Invalid username or password')
-      }
+      // Handle errors
+      const errorMessage = err.response?.data?.error || err.message || 'Invalid username or password'
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }

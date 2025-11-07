@@ -243,7 +243,6 @@ function UserManagement() {
                   <tr>
                     <th>Name</th>
                     <th>Username</th>
-                    <th>Email</th>
                     <th>Last Sign In</th>
                   </tr>
                 </thead>
@@ -256,7 +255,6 @@ function UserManagement() {
                     >
                       <td>{user.name || 'N/A'}</td>
                       <td>{user.username || 'N/A'}</td>
-                      <td>{user.email || 'N/A'}</td>
                       <td>{user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : 'Never'}</td>
                     </tr>
                   ))}
@@ -482,19 +480,6 @@ function UserManagement() {
                     pattern="[a-zA-Z0-9_]+"
                     title="Username can only contain letters, numbers, and underscores"
                   />
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Email</Form.Label>
-                  <Form.Control
-                    type="email"
-                    value={selectedStaff.email || 'N/A'}
-                    disabled
-                    readOnly
-                  />
-                  <Form.Text className="text-muted">
-                    Email cannot be changed. It is automatically generated from username.
-                  </Form.Text>
                 </Form.Group>
 
                 <Form.Group className="mb-3">
