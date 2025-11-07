@@ -65,16 +65,15 @@ function Dashboard({ user }) {
         const roleResponse = await api.get(`/user/role/${user.id}`)
         setUserRole(roleResponse.data.role)
 
-        if (roleResponse.data.role === 'admin') {
-          const [statsResponse, dateResponse] = await Promise.all([
-            api.get('/stats/sales'),
-            api.get(`/sales/date?date=${selectedDate}`)
-          ])
-          setStats(statsResponse.data)
-          setTodayCustomers(dateResponse.data.customers || [])
-          setTodaySales(dateResponse.data.sales || [])
-          setTodayLogbook(dateResponse.data.logbook || [])
-        }
+        // Fetch stats and date data for both admin and staff
+        const [statsResponse, dateResponse] = await Promise.all([
+          api.get('/stats/sales'),
+          api.get(`/sales/date?date=${selectedDate}`)
+        ])
+        setStats(statsResponse.data)
+        setTodayCustomers(dateResponse.data.customers || [])
+        setTodaySales(dateResponse.data.sales || [])
+        setTodayLogbook(dateResponse.data.logbook || [])
       } catch (error) {
         console.error('Error fetching data:', error)
       }
@@ -172,12 +171,10 @@ function Dashboard({ user }) {
         payment_method: 'Cash'
       })
 
-      // Refresh stats and logbook if admin
-      if (userRole === 'admin') {
-        const statsResponse = await api.get('/stats/sales')
-        setStats(statsResponse.data)
-        fetchDateData(selectedDate)
-      }
+      // Refresh stats and logbook
+      const statsResponse = await api.get('/stats/sales')
+      setStats(statsResponse.data)
+      fetchDateData(selectedDate)
 
       setTimeout(() => {
         setShowLogbookModal(false)
@@ -233,12 +230,10 @@ function Dashboard({ user }) {
 
       setSuccess('Logbook entry updated successfully!')
 
-      // Refresh stats and logbook if admin
-      if (userRole === 'admin') {
-        const statsResponse = await api.get('/stats/sales')
-        setStats(statsResponse.data)
-        fetchDateData(selectedDate)
-      }
+      // Refresh stats and logbook
+      const statsResponse = await api.get('/stats/sales')
+      setStats(statsResponse.data)
+      fetchDateData(selectedDate)
 
       setTimeout(() => {
         setShowLogbookEditModal(false)
@@ -267,12 +262,10 @@ function Dashboard({ user }) {
       await api.delete(`/logbook/${selectedLogbookEntry.id}`)
       setSuccess('Logbook entry deleted successfully!')
 
-      // Refresh stats and logbook if admin
-      if (userRole === 'admin') {
-        const statsResponse = await api.get('/stats/sales')
-        setStats(statsResponse.data)
-        fetchDateData(selectedDate)
-      }
+      // Refresh stats and logbook
+      const statsResponse = await api.get('/stats/sales')
+      setStats(statsResponse.data)
+      fetchDateData(selectedDate)
 
       setTimeout(() => {
         setShowLogbookEditModal(false)
@@ -323,12 +316,10 @@ function Dashboard({ user }) {
       setSearchTerm('')
       fetchProducts()
       
-      // Refresh stats and today's data if admin
-      if (userRole === 'admin') {
-        const statsResponse = await api.get('/stats/sales')
-        setStats(statsResponse.data)
-        fetchDateData(selectedDate)
-      }
+      // Refresh stats and today's data
+      const statsResponse = await api.get('/stats/sales')
+      setStats(statsResponse.data)
+      fetchDateData(selectedDate)
       
       setTimeout(() => {
         setShowSalesModal(false)
@@ -345,18 +336,16 @@ function Dashboard({ user }) {
   return (
     <Container>
       <h1 className="my-4">Welcome to Gym Core</h1>
-      {userRole === 'admin' && (
-        <Row className="mb-4">
-          <Col md={12}>
-            <Card className="h-100 shadow-sm bg-success text-white">
-              <Card.Body>
-                <Card.Title>Today's Revenue</Card.Title>
-                <h2>₱{stats.todayRevenue?.toFixed(2) || '0.00'}</h2>
-              </Card.Body>
-            </Card>
-          </Col>
-        </Row>
-      )}
+      <Row className="mb-4">
+        <Col md={12}>
+          <Card className="h-100 shadow-sm bg-success text-white">
+            <Card.Body>
+              <Card.Title>Today's Revenue</Card.Title>
+              <h2>₱{stats.todayRevenue?.toFixed(2) || '0.00'}</h2>
+            </Card.Body>
+          </Card>
+        </Col>
+      </Row>
       
       <Row className="mb-4">
         <Col md={6} className="mb-3">
@@ -381,29 +370,27 @@ function Dashboard({ user }) {
         </Col>
       </Row>
 
-      {userRole === 'admin' && (
-        <>
-          <Card className="mb-4">
-            <Card.Body>
-              <Row className="align-items-center">
-                <Col md={4}>
-                  <Form.Group>
-                    <Form.Label><strong>Select Date to View Records</strong></Form.Label>
-                    <Form.Control
-                      type="date"
-                      value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
-                    />
-                  </Form.Group>
-                </Col>
-                <Col md={8}>
-                  <h5 className="mb-0">
-                    {isTodayLocal(selectedDate) ? 'Records for Today' : `Records for ${formatDateLocal(selectedDate)}`}
-                  </h5>
-                </Col>
-              </Row>
-            </Card.Body>
-          </Card>
+      <Card className="mb-4">
+        <Card.Body>
+          <Row className="align-items-center">
+            <Col md={4}>
+              <Form.Group>
+                <Form.Label><strong>Select Date to View Records</strong></Form.Label>
+                <Form.Control
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                />
+              </Form.Group>
+            </Col>
+            <Col md={8}>
+              <h5 className="mb-0">
+                {isTodayLocal(selectedDate) ? 'Records for Today' : `Records for ${formatDateLocal(selectedDate)}`}
+              </h5>
+            </Col>
+          </Row>
+        </Card.Body>
+      </Card>
           <Row className="mb-4">
             <Col md={6}>
               <Card>
@@ -587,8 +574,6 @@ function Dashboard({ user }) {
               </Card>
             </Col>
           </Row>
-        </>
-      )}
 
       {/* Log Book Edit/Delete Modal */}
       <Modal show={showLogbookEditModal} onHide={() => {
