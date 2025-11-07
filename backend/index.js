@@ -112,22 +112,76 @@ app.post('/api/users/update', async (req, res) => {
   try {
     const { userId, name, username } = req.body
     
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' })
+    }
+    
+    // Get user email from auth.users using admin API
+    let userEmail = null
+    try {
+      const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(userId)
+      if (!authError && authUser?.user) {
+        userEmail = authUser.user.email
+      }
+    } catch (adminError) {
+      console.warn('Could not fetch user from auth:', adminError)
+    }
+    
+    // First, check if user exists
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('id, email')
+      .eq('id', userId)
+      .single()
+    
+    // If user doesn't exist, create it
+    if (checkError && checkError.code === 'PGRST116') {
+      if (!userEmail) {
+        return res.status(404).json({ error: 'User not found in auth. Please ensure the user was created successfully.' })
+      }
+      
+      // Create user record
+      const { data: newUser, error: createError } = await supabase
+        .from('users')
+        .insert({
+          id: userId,
+          email: userEmail,
+          role: 'staff',
+          name: name || null,
+          username: username || null
+        })
+        .select()
+        .single()
+      
+      if (createError) {
+        console.error('Error creating user:', createError)
+        return res.status(500).json({ error: 'Failed to create user record', details: createError.message })
+      }
+      
+      return res.json(newUser)
+    }
+    
+    // Update existing user
+    const updateData = {}
+    if (name !== undefined) updateData.name = name
+    if (username !== undefined) updateData.username = username
+    
     const { data, error } = await supabase
       .from('users')
-      .update({ name, username })
+      .update(updateData)
       .eq('id', userId)
       .select()
       .single()
     
     if (error) {
       console.error('Error updating user:', error)
-      return res.status(500).json({ error: 'Failed to update user' })
+      return res.status(500).json({ error: 'Failed to update user', details: error.message })
     }
     
     res.json(data)
   } catch (error) {
     console.error('Error:', error)
-    res.status(500).json({ error: 'Internal server error' })
+    res.status(500).json({ error: 'Internal server error', details: error.message })
   }
 })
 

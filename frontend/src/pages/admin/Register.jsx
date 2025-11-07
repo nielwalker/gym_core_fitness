@@ -203,8 +203,13 @@ function Register({ user }) {
       }
 
       // Update user record with name and username via backend API
+      // Wait a bit for the trigger to create the user record first
       if (data.user) {
         try {
+          // Wait 500ms for the database trigger to complete
+          await new Promise(resolve => setTimeout(resolve, 500))
+          
+          // Update user record with name and username
           await api.post('/api/users/update', {
             userId: data.user.id,
             name: staffData.name,
@@ -212,7 +217,20 @@ function Register({ user }) {
           })
         } catch (updateError) {
           console.error('Error updating user:', updateError)
-          // Don't throw here, user was created successfully
+          // Try one more time after a longer delay
+          try {
+            await new Promise(resolve => setTimeout(resolve, 1000))
+            await api.post('/api/users/update', {
+              userId: data.user.id,
+              name: staffData.name,
+              username: staffData.username
+            })
+          } catch (retryError) {
+            console.error('Error updating user on retry:', retryError)
+            // Don't throw here, user was created successfully in auth
+            // The trigger should have created the record, but name/username might be missing
+            setError('Staff account created, but there was an issue saving name/username. Please update manually.')
+          }
         }
       }
 

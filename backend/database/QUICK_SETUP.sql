@@ -114,12 +114,23 @@ CREATE POLICY "Service role can access sales"
   WITH CHECK (true);
 
 -- Function to automatically create user record when auth user is created
+-- This function extracts name and username from user metadata
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.users (id, email, role)
-  VALUES (NEW.id, NEW.email, 'staff')
-  ON CONFLICT (id) DO NOTHING;
+  INSERT INTO public.users (id, email, role, name, username)
+  VALUES (
+    NEW.id, 
+    NEW.email, 
+    'staff',
+    COALESCE(NEW.raw_user_meta_data->>'name', NULL),
+    COALESCE(NEW.raw_user_meta_data->>'username', NULL)
+  )
+  ON CONFLICT (id) DO UPDATE
+  SET 
+    name = COALESCE(EXCLUDED.name, public.users.name),
+    username = COALESCE(EXCLUDED.username, public.users.username),
+    email = EXCLUDED.email;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

@@ -29,9 +29,12 @@ function Login() {
         return
       }
 
-      // If not admin, try Supabase authentication (using username as email)
+      // If not admin, try Supabase authentication
+      // Check if username already contains @ (is an email), otherwise append @gymcore.com
+      const emailForAuth = username.includes('@') ? username : `${username}@gymcore.com`
+      
       const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: username, // Use username as email for Supabase
+        email: emailForAuth,
         password,
       })
 
