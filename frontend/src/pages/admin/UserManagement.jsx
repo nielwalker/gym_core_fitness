@@ -168,7 +168,7 @@ function UserManagement() {
     setSuccess('')
 
     try {
-      await api.post('/api/users/update', {
+      await api.post('/users/update', {
         userId: selectedStaff.id,
         name: staffEditData.name,
         username: staffEditData.username
@@ -195,7 +195,7 @@ function UserManagement() {
     setSuccess('')
 
     try {
-      await api.delete(`/api/users/${selectedStaff.id}`)
+      await api.delete(`/users/${selectedStaff.id}`)
       setSuccess('Staff member deleted successfully!')
       fetchUsers()
       setTimeout(() => {
