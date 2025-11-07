@@ -38,7 +38,17 @@ function Login() {
         password,
       })
 
-      if (authError) throw authError
+      if (authError) {
+        // Handle specific error messages
+        if (authError.message.includes('Email not confirmed')) {
+          setError('Email not confirmed. Please contact an administrator to activate your account.')
+        } else if (authError.message.includes('Invalid login credentials')) {
+          setError('Invalid username or password')
+        } else {
+          throw authError
+        }
+        return
+      }
 
       if (data.user) {
         // Store Supabase user
@@ -47,7 +57,12 @@ function Login() {
         navigate('/dashboard')
       }
     } catch (err) {
-      setError(err.message || 'Invalid username or password')
+      // Handle other errors
+      if (err.message && err.message.includes('Email not confirmed')) {
+        setError('Email not confirmed. Please contact an administrator to activate your account.')
+      } else {
+        setError(err.message || 'Invalid username or password')
+      }
     } finally {
       setLoading(false)
     }

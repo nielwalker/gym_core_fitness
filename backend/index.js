@@ -107,6 +107,65 @@ app.get('/api/user/role/:id', async (req, res) => {
   }
 })
 
+// Create staff user with auto-confirmation
+app.post('/api/users/create', async (req, res) => {
+  try {
+    const { name, username, password } = req.body
+    
+    if (!name || !username || !password) {
+      return res.status(400).json({ error: 'Name, username, and password are required' })
+    }
+    
+    // Format email from username
+    const email = `${username}@gymcore.com`
+    
+    // Create user using admin API with email_confirmed set to true
+    const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+      email: email,
+      password: password,
+      email_confirm: true, // Auto-confirm email
+      user_metadata: {
+        name: name,
+        username: username
+      }
+    })
+    
+    if (authError) {
+      console.error('Error creating user:', authError)
+      return res.status(500).json({ error: 'Failed to create user', details: authError.message })
+    }
+    
+    // Wait a bit for the trigger to create the user record
+    await new Promise(resolve => setTimeout(resolve, 500))
+    
+    // Update user record with name and username
+    try {
+      const { data: updatedUser, error: updateError } = await supabase
+        .from('users')
+        .update({ name, username })
+        .eq('id', authUser.user.id)
+        .select()
+        .single()
+      
+      if (updateError) {
+        console.error('Error updating user record:', updateError)
+        // User was created in auth, but update failed - not critical
+      }
+    } catch (updateError) {
+      console.error('Error updating user record:', updateError)
+    }
+    
+    res.json({ 
+      success: true, 
+      user: authUser.user,
+      message: 'Staff member created successfully and can login immediately'
+    })
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error', details: error.message })
+  }
+})
+
 // Update user (name and username)
 app.post('/api/users/update', async (req, res) => {
   try {
@@ -202,6 +261,28 @@ app.get('/api/users', async (req, res) => {
   } catch (error) {
     console.error('Error:', error)
     res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Confirm user email (for existing unconfirmed users)
+app.post('/api/users/:id/confirm', async (req, res) => {
+  try {
+    const { id } = req.params
+    
+    // Update user to confirm email using admin API
+    const { data: authUser, error: authError } = await supabase.auth.admin.updateUserById(id, {
+      email_confirm: true
+    })
+    
+    if (authError) {
+      console.error('Error confirming user email:', authError)
+      return res.status(500).json({ error: 'Failed to confirm user email', details: authError.message })
+    }
+    
+    res.json({ success: true, message: 'User email confirmed successfully', user: authUser.user })
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error', details: error.message })
   }
 })
 

@@ -181,66 +181,22 @@ function Register({ user }) {
     }
 
     try {
-      // Use username as email for Supabase (since Supabase requires email)
-      // Format: username@gymcore.com (using .com instead of .local for valid email)
-      const emailForAuth = `${staffData.username}@gymcore.com`
-      
-      // Create user in Supabase Auth
-      const { data, error: authError } = await supabase.auth.signUp({
-        email: emailForAuth,
-        password: staffData.password,
-        options: {
-          data: {
-            name: staffData.name,
-            username: staffData.username
-          }
-        }
+      // Create staff user via backend API (which auto-confirms email)
+      const response = await api.post('/users/create', {
+        name: staffData.name,
+        username: staffData.username,
+        password: staffData.password
       })
 
-      if (authError) {
-        console.error('Auth error:', authError)
-        throw authError
+      if (response.data.success) {
+        setSuccess('Staff member registered successfully! They can login immediately.')
+        setStaffData({
+          name: '',
+          username: '',
+          password: '',
+          confirmPassword: ''
+        })
       }
-
-      // Update user record with name and username via backend API
-      // Wait a bit for the trigger to create the user record first
-      if (data.user) {
-        try {
-          // Wait 500ms for the database trigger to complete
-          await new Promise(resolve => setTimeout(resolve, 500))
-          
-          // Update user record with name and username
-          await api.post('/api/users/update', {
-            userId: data.user.id,
-            name: staffData.name,
-            username: staffData.username
-          })
-        } catch (updateError) {
-          console.error('Error updating user:', updateError)
-          // Try one more time after a longer delay
-          try {
-            await new Promise(resolve => setTimeout(resolve, 1000))
-            await api.post('/api/users/update', {
-              userId: data.user.id,
-              name: staffData.name,
-              username: staffData.username
-            })
-          } catch (retryError) {
-            console.error('Error updating user on retry:', retryError)
-            // Don't throw here, user was created successfully in auth
-            // The trigger should have created the record, but name/username might be missing
-            setError('Staff account created, but there was an issue saving name/username. Please update manually.')
-          }
-        }
-      }
-
-      setSuccess('Staff member registered successfully!')
-      setStaffData({
-        name: '',
-        username: '',
-        password: '',
-        confirmPassword: ''
-      })
     } catch (error) {
       console.error('Registration error:', error)
       const errorMessage = error.message || error.response?.data?.error || 'Failed to register staff member'
