@@ -19,6 +19,18 @@ function CustomerRegistration() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [selectedCustomer, setSelectedCustomer] = useState(null)
+  const [editData, setEditData] = useState({
+    name: '',
+    address: '',
+    contact_no: '',
+    payment_method: 'Cash',
+    amount: '',
+    partial_amount: '',
+    registration_type: 'Monthly',
+    expiration_date: ''
+  })
   const [user, setUser] = useState(null)
 
   useEffect(() => {
@@ -42,6 +54,92 @@ function CustomerRegistration() {
   const handleChange = (e) => {
     const { name, value } = e.target
     setCustomerData({ ...customerData, [name]: value })
+  }
+
+  const handleCustomerClick = (customer) => {
+    setSelectedCustomer(customer)
+    setEditData({
+      name: customer.name || '',
+      address: customer.address || '',
+      contact_no: customer.contact_no || '',
+      payment_method: customer.payment_method || 'Cash',
+      amount: customer.amount ? customer.amount.toString() : '',
+      partial_amount: customer.partial_amount ? customer.partial_amount.toString() : '',
+      registration_type: customer.registration_type || 'Monthly',
+      expiration_date: customer.expiration_date ? customer.expiration_date.split('T')[0] : ''
+    })
+    setShowEditModal(true)
+    setError('')
+    setSuccess('')
+  }
+
+  const handleEditChange = (e) => {
+    const { name, value } = e.target
+    setEditData({ ...editData, [name]: value })
+  }
+
+  const handleUpdate = async () => {
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      await api.put(`/customers/${selectedCustomer.id}`, editData)
+      setSuccess('Customer updated successfully!')
+      fetchCustomers()
+      setTimeout(() => {
+        setShowEditModal(false)
+        setSelectedCustomer(null)
+      }, 1500)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to update customer')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this customer?')) {
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      await api.delete(`/customers/${selectedCustomer.id}`)
+      setSuccess('Customer deleted successfully!')
+      fetchCustomers()
+      setTimeout(() => {
+        setShowEditModal(false)
+        setSelectedCustomer(null)
+      }, 1500)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to delete customer')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handlePaid = async () => {
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      await api.put(`/customers/${selectedCustomer.id}/paid`, {})
+      setSuccess('Remaining balance cleared successfully!')
+      fetchCustomers()
+      setTimeout(() => {
+        setShowEditModal(false)
+        setSelectedCustomer(null)
+      }, 1500)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to clear remaining balance')
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -205,7 +303,11 @@ function CustomerRegistration() {
                   const isExpired = expirationDate && expirationDate < today
                   
                   return (
-                    <tr key={customer.id}>
+                    <tr 
+                      key={customer.id}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleCustomerClick(customer)}
+                    >
                       <td>{customer.name}</td>
                       <td>{customer.address || 'N/A'}</td>
                       <td>{customer.contact_no}</td>
@@ -355,6 +457,181 @@ function CustomerRegistration() {
             <Button variant="primary" type="submit" disabled={loading} className="w-100">
               {loading ? 'Registering...' : 'Register Customer'}
             </Button>
+          </Form>
+        </Modal.Body>
+      </Modal>
+
+      {/* Edit/Delete Customer Modal */}
+      <Modal show={showEditModal} onHide={() => {
+        setShowEditModal(false)
+        setSelectedCustomer(null)
+        setError('')
+        setSuccess('')
+        setEditData({
+          name: '',
+          address: '',
+          contact_no: '',
+          payment_method: 'Cash',
+          amount: '',
+          partial_amount: '',
+          registration_type: 'Monthly',
+          expiration_date: ''
+        })
+      }} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Edit/Delete Customer</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {error && <Alert variant="danger" onClose={() => setError('')} dismissible>{error}</Alert>}
+          {success && <Alert variant="success" onClose={() => setSuccess('')} dismissible>{success}</Alert>}
+          
+          <Form>
+            <Form.Group className="mb-3">
+              <Form.Label>Name *</Form.Label>
+              <Form.Control
+                type="text"
+                name="name"
+                value={editData.name}
+                onChange={handleEditChange}
+                required
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Address *</Form.Label>
+              <Form.Control
+                type="text"
+                name="address"
+                value={editData.address}
+                onChange={handleEditChange}
+                required
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Contact No *</Form.Label>
+              <Form.Control
+                type="tel"
+                name="contact_no"
+                value={editData.contact_no}
+                onChange={handleEditChange}
+                required
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Payment Method *</Form.Label>
+              <Form.Select
+                name="payment_method"
+                value={editData.payment_method}
+                onChange={handleEditChange}
+                required
+              >
+                <option value="Cash">Cash</option>
+                <option value="Gcash">Gcash</option>
+                <option value="Partial">Partial</option>
+              </Form.Select>
+            </Form.Group>
+
+            {editData.payment_method === 'Partial' && (
+              <>
+                <Form.Group className="mb-3">
+                  <Form.Label>Partial Amount *</Form.Label>
+                  <Form.Control
+                    type="number"
+                    step="0.01"
+                    name="partial_amount"
+                    value={editData.partial_amount}
+                    onChange={handleEditChange}
+                    required
+                  />
+                </Form.Group>
+                <Form.Group className="mb-3">
+                  <Form.Label>Total Amount *</Form.Label>
+                  <Form.Control
+                    type="number"
+                    step="0.01"
+                    name="amount"
+                    value={editData.amount}
+                    onChange={handleEditChange}
+                    required
+                  />
+                </Form.Group>
+              </>
+            )}
+
+            {editData.payment_method === 'Cash' && (
+              <Form.Group className="mb-3">
+                <Form.Label>Amount *</Form.Label>
+                <Form.Control
+                  type="number"
+                  step="0.01"
+                  name="amount"
+                  value={editData.amount}
+                  onChange={handleEditChange}
+                  required
+                />
+              </Form.Group>
+            )}
+
+            <Form.Group className="mb-3">
+              <Form.Label>Registration Type *</Form.Label>
+              <Form.Select
+                name="registration_type"
+                value={editData.registration_type}
+                onChange={handleEditChange}
+                required
+              >
+                <option value="Monthly">Monthly</option>
+                <option value="Membership">Membership</option>
+              </Form.Select>
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Expiration Date *</Form.Label>
+              <Form.Control
+                type="date"
+                name="expiration_date"
+                value={editData.expiration_date}
+                onChange={handleEditChange}
+                required
+              />
+            </Form.Group>
+
+            {selectedCustomer && selectedCustomer.remaining_amount > 0 && (
+              <Alert variant="warning" className="mb-3">
+                <strong>Remaining Balance:</strong> ₱{parseFloat(selectedCustomer.remaining_amount).toFixed(2)}
+              </Alert>
+            )}
+
+            <div className="d-flex gap-2">
+              <Button 
+                variant="warning" 
+                onClick={handleUpdate} 
+                disabled={loading} 
+                className="flex-fill"
+              >
+                {loading ? 'Updating...' : 'Update'}
+              </Button>
+              {selectedCustomer && selectedCustomer.remaining_amount > 0 && (
+                <Button 
+                  variant="info" 
+                  onClick={handlePaid} 
+                  disabled={loading} 
+                  className="flex-fill"
+                >
+                  {loading ? 'Processing...' : 'Mark as Paid'}
+                </Button>
+              )}
+              <Button 
+                variant="danger" 
+                onClick={handleDelete} 
+                disabled={loading} 
+                className="flex-fill"
+              >
+                {loading ? 'Deleting...' : 'Delete'}
+              </Button>
+            </div>
           </Form>
         </Modal.Body>
       </Modal>
