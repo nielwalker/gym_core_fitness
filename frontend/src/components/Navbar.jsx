@@ -44,20 +44,28 @@ function Sidebar({ user, onCollapseChange }) {
   }, [user])
 
   const handleLogout = async () => {
-    // Sign out from Supabase if not hardcoded admin
-    if (user && !isHardcodedAdmin(user)) {
-      await supabase.auth.signOut()
+    try {
+      // Sign out from Supabase if not hardcoded admin
+      if (user && !isHardcodedAdmin(user)) {
+        await supabase.auth.signOut()
+      }
+      
+      // Clear localStorage first
+      localStorage.removeItem('gymcore_user')
+      localStorage.removeItem('gymcore_is_admin')
+      
+      // Dispatch custom logout event to notify App component
+      window.dispatchEvent(new Event('gymcore-logout'))
+      
+      // Force navigation to login page
+      window.location.href = '/login'
+    } catch (error) {
+      console.error('Logout error:', error)
+      // Even if there's an error, clear storage and navigate
+      localStorage.removeItem('gymcore_user')
+      localStorage.removeItem('gymcore_is_admin')
+      window.location.href = '/login'
     }
-    
-    // Clear localStorage
-    localStorage.removeItem('gymcore_user')
-    localStorage.removeItem('gymcore_is_admin')
-    
-    // Dispatch custom logout event to notify App component
-    window.dispatchEvent(new Event('gymcore-logout'))
-    
-    // Navigate to login
-    navigate('/login')
   }
 
   const isActive = (path) => {

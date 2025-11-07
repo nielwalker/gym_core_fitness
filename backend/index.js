@@ -190,7 +190,7 @@ app.get('/api/users', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('users')
-      .select('id, name, username, last_sign_in_at')
+      .select('id, name, username, email, last_sign_in_at, created_at')
       .order('created_at', { ascending: false })
     
     if (error) {
@@ -202,6 +202,35 @@ app.get('/api/users', async (req, res) => {
   } catch (error) {
     console.error('Error:', error)
     res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Delete user
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    
+    // First delete from auth.users (this will cascade delete from public.users due to ON DELETE CASCADE)
+    const { error: authError } = await supabase.auth.admin.deleteUser(id)
+    
+    if (authError) {
+      console.error('Error deleting user from auth:', authError)
+      // If auth deletion fails, try to delete from public.users directly
+      const { error: dbError } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', id)
+      
+      if (dbError) {
+        console.error('Error deleting user from database:', dbError)
+        return res.status(500).json({ error: 'Failed to delete user', details: dbError.message })
+      }
+    }
+    
+    res.json({ success: true, message: 'User deleted successfully' })
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error', details: error.message })
   }
 })
 

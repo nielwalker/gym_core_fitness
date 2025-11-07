@@ -7,7 +7,9 @@ function UserManagement() {
   const [customers, setCustomers] = useState([])
   const [activeTab, setActiveTab] = useState('staff')
   const [selectedCustomer, setSelectedCustomer] = useState(null)
+  const [selectedStaff, setSelectedStaff] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [showStaffModal, setShowStaffModal] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -20,6 +22,10 @@ function UserManagement() {
     partial_amount: '',
     registration_type: 'Monthly',
     expiration_date: ''
+  })
+  const [staffEditData, setStaffEditData] = useState({
+    name: '',
+    username: ''
   })
 
   useEffect(() => {
@@ -133,6 +139,75 @@ function UserManagement() {
     }
   }
 
+  const handleStaffClick = (staff) => {
+    setSelectedStaff(staff)
+    setStaffEditData({
+      name: staff.name || '',
+      username: staff.username || ''
+    })
+    setShowStaffModal(true)
+    setError('')
+    setSuccess('')
+  }
+
+  const handleCloseStaffModal = () => {
+    setShowStaffModal(false)
+    setSelectedStaff(null)
+    setError('')
+    setSuccess('')
+  }
+
+  const handleStaffEditChange = (e) => {
+    const { name, value } = e.target
+    setStaffEditData({ ...staffEditData, [name]: value })
+  }
+
+  const handleStaffUpdate = async () => {
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      await api.post('/api/users/update', {
+        userId: selectedStaff.id,
+        name: staffEditData.name,
+        username: staffEditData.username
+      })
+      setSuccess('Staff member updated successfully!')
+      fetchUsers()
+      setTimeout(() => {
+        handleCloseStaffModal()
+      }, 1500)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to update staff member')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleStaffDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete staff member "${selectedStaff.name || selectedStaff.username}"? This action cannot be undone.`)) {
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      await api.delete(`/api/users/${selectedStaff.id}`)
+      setSuccess('Staff member deleted successfully!')
+      fetchUsers()
+      setTimeout(() => {
+        handleCloseStaffModal()
+      }, 1500)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to delete staff member')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const isExpired = (expirationDate) => {
     if (!expirationDate) return false
     // Parse expiration date and compare with today's date (local timezone)
@@ -168,14 +243,20 @@ function UserManagement() {
                   <tr>
                     <th>Name</th>
                     <th>Username</th>
+                    <th>Email</th>
                     <th>Last Sign In</th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.map((user) => (
-                    <tr key={user.id}>
+                    <tr 
+                      key={user.id}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleStaffClick(user)}
+                    >
                       <td>{user.name || 'N/A'}</td>
                       <td>{user.username || 'N/A'}</td>
+                      <td>{user.email || 'N/A'}</td>
                       <td>{user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : 'Never'}</td>
                     </tr>
                   ))}
@@ -361,6 +442,86 @@ function UserManagement() {
             {loading ? 'Deleting...' : 'Delete'}
           </Button>
           <Button variant="secondary" onClick={handleCloseModal}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Staff Edit/Delete Modal */}
+      <Modal show={showStaffModal} onHide={handleCloseStaffModal} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Staff Account Management</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {error && <Alert variant="danger" onClose={() => setError('')} dismissible>{error}</Alert>}
+          {success && <Alert variant="success" onClose={() => setSuccess('')} dismissible>{success}</Alert>}
+
+          {selectedStaff && (
+            <>
+              <h5>Staff Details</h5>
+              <Form>
+                <Form.Group className="mb-3">
+                  <Form.Label>Name *</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="name"
+                    value={staffEditData.name}
+                    onChange={handleStaffEditChange}
+                    required
+                  />
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Username *</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="username"
+                    value={staffEditData.username}
+                    onChange={handleStaffEditChange}
+                    required
+                    pattern="[a-zA-Z0-9_]+"
+                    title="Username can only contain letters, numbers, and underscores"
+                  />
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Email</Form.Label>
+                  <Form.Control
+                    type="email"
+                    value={selectedStaff.email || 'N/A'}
+                    disabled
+                    readOnly
+                  />
+                  <Form.Text className="text-muted">
+                    Email cannot be changed. It is automatically generated from username.
+                  </Form.Text>
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Last Sign In</Form.Label>
+                  <Form.Control
+                    type="text"
+                    value={selectedStaff.last_sign_in_at ? new Date(selectedStaff.last_sign_in_at).toLocaleString() : 'Never'}
+                    disabled
+                    readOnly
+                  />
+                </Form.Group>
+
+                <Alert variant="warning">
+                  <strong>Note:</strong> Deleting a staff account will permanently remove their access. This action cannot be undone.
+                </Alert>
+              </Form>
+            </>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="primary" onClick={handleStaffUpdate} disabled={loading}>
+            {loading ? 'Updating...' : 'Update'}
+          </Button>
+          <Button variant="danger" onClick={handleStaffDelete} disabled={loading}>
+            {loading ? 'Deleting...' : 'Delete Account'}
+          </Button>
+          <Button variant="secondary" onClick={handleCloseStaffModal}>
             Close
           </Button>
         </Modal.Footer>
