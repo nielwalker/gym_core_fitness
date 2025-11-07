@@ -57,14 +57,14 @@ function Sidebar({ user, onCollapseChange }) {
       // Dispatch custom logout event to notify App component
       window.dispatchEvent(new Event('gymcore-logout'))
       
-      // Force navigation to login page
-      window.location.href = '/login'
+      // Use React Router navigation instead of window.location for proper client-side routing
+      navigate('/login', { replace: true })
     } catch (error) {
       console.error('Logout error:', error)
       // Even if there's an error, clear storage and navigate
       localStorage.removeItem('gymcore_user')
       localStorage.removeItem('gymcore_is_admin')
-      window.location.href = '/login'
+      navigate('/login', { replace: true })
     }
   }
 
