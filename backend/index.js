@@ -85,6 +85,89 @@ app.get('/api/test-db', async (req, res) => {
   }
 })
 
+// Staff login endpoint (bypasses email auth restrictions using service role)
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body
+    
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' })
+    }
+    
+    // Format email from username
+    const email = username.includes('@') ? username : `${username}@gymcore.com`
+    
+    // Create a client with service role key to bypass email auth restrictions
+    const adminSupabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    })
+    
+    // Try to sign in using service role (bypasses email auth restrictions)
+    const { data, error: authError } = await adminSupabase.auth.signInWithPassword({
+      email: email,
+      password: password,
+    })
+    
+    if (authError) {
+      console.error('Login error:', authError)
+      if (authError.message.includes('Invalid login credentials')) {
+        return res.status(401).json({ error: 'Invalid username or password' })
+      } else if (authError.message.includes('Email not confirmed')) {
+        return res.status(401).json({ error: 'Email not confirmed. Please contact an administrator.' })
+      } else if (authError.message.includes('Email logins are disabled') || authError.message.includes('disabled')) {
+        // If email auth is disabled, try to get user info and provide helpful error
+        try {
+          const { data: userList } = await supabase.auth.admin.listUsers()
+          const user = userList?.users?.find(u => u.email === email)
+          if (user) {
+            return res.status(403).json({ 
+              error: 'Email authentication is disabled in Supabase. Please enable email/password authentication in Supabase Dashboard → Authentication → Providers → Email.' 
+            })
+          }
+        } catch (e) {
+          // Ignore errors when checking user list
+        }
+        return res.status(403).json({ 
+          error: 'Email authentication is disabled. Please enable email/password authentication in Supabase Dashboard → Authentication → Providers → Email.' 
+        })
+      } else {
+        return res.status(401).json({ error: authError.message || 'Login failed' })
+      }
+    }
+    
+    if (data.user) {
+      // Get user details from users table
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id, name, username, email, role')
+        .eq('id', data.user.id)
+        .single()
+      
+      // Return user data with session
+      res.json({
+        user: {
+          id: data.user.id,
+          email: data.user.email,
+          ...(userData && {
+            name: userData.name,
+            username: userData.username,
+            role: userData.role || 'staff'
+          })
+        },
+        session: data.session
+      })
+    } else {
+      res.status(401).json({ error: 'Login failed' })
+    }
+  } catch (error) {
+    console.error('Error during login:', error)
+    res.status(500).json({ error: 'Internal server error', details: error.message })
+  }
+})
+
 // Get user role
 app.get('/api/user/role/:id', async (req, res) => {
   try {
@@ -743,6 +826,135 @@ app.post('/api/sales', async (req, res) => {
   }
 })
 
+// Update sale
+app.put('/api/sales/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { product_id, quantity, total_amount } = req.body
+    
+    if (!product_id || !quantity || total_amount === undefined) {
+      return res.status(400).json({ error: 'Product ID, quantity, and total amount are required' })
+    }
+    
+    // Get old sale to restore stock
+    const { data: oldSale, error: oldSaleError } = await supabase
+      .from('sales')
+      .select('product_id, quantity')
+      .eq('id', id)
+      .single()
+    
+    if (oldSaleError) {
+      return res.status(404).json({ error: 'Sale not found' })
+    }
+    
+    // Restore old stock
+    if (oldSale.product_id) {
+      const { data: oldProduct } = await supabase
+        .from('products')
+        .select('stock_quantity')
+        .eq('id', oldSale.product_id)
+        .single()
+      
+      if (oldProduct) {
+        await supabase
+          .from('products')
+          .update({ stock_quantity: (oldProduct.stock_quantity || 0) + oldSale.quantity })
+          .eq('id', oldSale.product_id)
+      }
+    }
+    
+    // Get new product to update stock
+    const { data: product, error: productError } = await supabase
+      .from('products')
+      .select('stock_quantity')
+      .eq('id', product_id)
+      .single()
+    
+    if (productError) {
+      return res.status(400).json({ error: 'Product not found' })
+    }
+    
+    // Update stock
+    const newStock = (product.stock_quantity || 0) - quantity
+    await supabase
+      .from('products')
+      .update({ stock_quantity: Math.max(0, newStock) })
+      .eq('id', product_id)
+    
+    // Update sale
+    const { data, error } = await supabase
+      .from('sales')
+      .update({
+        product_id,
+        quantity,
+        total_amount: parseFloat(total_amount)
+      })
+      .eq('id', id)
+      .select()
+      .single()
+    
+    if (error) {
+      console.error('Error updating sale:', error)
+      return res.status(500).json({ error: 'Failed to update sale' })
+    }
+    
+    res.json(data)
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Delete sale
+app.delete('/api/sales/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    
+    // Get sale to restore stock
+    const { data: sale, error: saleError } = await supabase
+      .from('sales')
+      .select('product_id, quantity')
+      .eq('id', id)
+      .single()
+    
+    if (saleError) {
+      return res.status(404).json({ error: 'Sale not found' })
+    }
+    
+    // Restore stock
+    if (sale.product_id) {
+      const { data: product } = await supabase
+        .from('products')
+        .select('stock_quantity')
+        .eq('id', sale.product_id)
+        .single()
+      
+      if (product) {
+        await supabase
+          .from('products')
+          .update({ stock_quantity: (product.stock_quantity || 0) + sale.quantity })
+          .eq('id', sale.product_id)
+      }
+    }
+    
+    // Delete sale
+    const { error } = await supabase
+      .from('sales')
+      .delete()
+      .eq('id', id)
+    
+    if (error) {
+      console.error('Error deleting sale:', error)
+      return res.status(500).json({ error: 'Failed to delete sale' })
+    }
+    
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // Get sales by date
 app.get('/api/sales/date', async (req, res) => {
   try {
@@ -811,10 +1023,29 @@ app.get('/api/sales/date', async (req, res) => {
       return res.status(500).json({ error: 'Failed to fetch date data' })
     }
     
+    // Calculate revenue for the date
+    const salesRevenue = (sales || []).reduce((sum, sale) => sum + (parseFloat(sale.total_amount) || 0), 0)
+    const customerRevenue = (customers || []).reduce((sum, customer) => {
+      // For partial payments, use partial_amount, otherwise use amount
+      const amount = customer.payment_method === 'Partial' 
+        ? (parseFloat(customer.partial_amount) || 0)
+        : (parseFloat(customer.amount) || 0)
+      return sum + amount
+    }, 0)
+    const logbookRevenue = (logbook || []).reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0)
+    const totalRevenue = salesRevenue + customerRevenue + logbookRevenue
+
     res.json({
       sales: sales || [],
       customers: customers || [],
-      logbook: logbook || []
+      logbook: logbook || [],
+      stats: {
+        revenue: totalRevenue,
+        salesCount: (sales || []).length,
+        customersCount: (customers || []).length,
+        logbookCount: (logbook || []).length,
+        count: (sales || []).length + (customers || []).length + (logbook || []).length
+      }
     })
   } catch (error) {
     console.error('Error:', error)
@@ -857,7 +1088,13 @@ app.get('/api/stats/sales', async (req, res) => {
     }
     
     const salesRevenue = (todaySales || []).reduce((sum, sale) => sum + (parseFloat(sale.total_amount) || 0), 0)
-    const customerRevenue = (todayCustomers || []).reduce((sum, customer) => sum + (parseFloat(customer.amount) || 0), 0)
+    const customerRevenue = (todayCustomers || []).reduce((sum, customer) => {
+      // For partial payments, use partial_amount, otherwise use amount
+      const amount = customer.payment_method === 'Partial' 
+        ? (parseFloat(customer.partial_amount) || 0)
+        : (parseFloat(customer.amount) || 0)
+      return sum + amount
+    }, 0)
     const logbookRevenue = (todayLogbook || []).reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0)
     
     const todayRevenue = salesRevenue + customerRevenue + logbookRevenue

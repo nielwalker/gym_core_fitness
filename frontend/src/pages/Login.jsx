@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Container, Card, Form, Button, Alert } from 'react-bootstrap'
 import { useNavigate } from 'react-router-dom'
 import { checkHardcodedAdmin } from '../lib/auth'
-import { supabase } from '../lib/supabase'
+import api from '../lib/axios'
 
 function Login() {
   const [username, setUsername] = useState('')
@@ -29,32 +29,30 @@ function Login() {
         return
       }
 
-      // If not admin, try Supabase authentication
-      // Format: username@gymcore.com (email is required by Supabase but hidden from user)
-      const emailForAuth = username.includes('@') ? username : `${username}@gymcore.com`
-      
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: emailForAuth,
-        password,
-      })
+      // If not admin, try backend authentication (bypasses email auth restrictions)
+      try {
+        const response = await api.post('/auth/login', {
+          username,
+          password,
+        })
 
-      if (authError) {
-        // Handle specific error messages
-        if (authError.message.includes('Email not confirmed')) {
-          setError('Email not confirmed. Please contact an administrator to activate your account.')
-        } else if (authError.message.includes('Invalid login credentials')) {
-          setError('Invalid username or password')
-        } else {
-          setError(authError.message || 'Login failed')
+        if (response.data.user) {
+          // Store user data
+          localStorage.setItem('gymcore_user', JSON.stringify(response.data.user))
+          localStorage.setItem('gymcore_is_admin', 'false')
+          // Store session if available
+          if (response.data.session) {
+            localStorage.setItem('gymcore_session', JSON.stringify(response.data.session))
+          }
+          // Dispatch custom event to notify App component
+          window.dispatchEvent(new Event('gymcore-login'))
+          navigate('/dashboard')
         }
+      } catch (apiError) {
+        // Handle API errors
+        const errorMessage = apiError.response?.data?.error || apiError.message || 'Invalid username or password'
+        setError(errorMessage)
         return
-      }
-
-      if (data.user) {
-        // Store Supabase user
-        localStorage.setItem('gymcore_user', JSON.stringify(data.user))
-        localStorage.setItem('gymcore_is_admin', 'false')
-        navigate('/dashboard')
       }
     } catch (err) {
       // Handle errors

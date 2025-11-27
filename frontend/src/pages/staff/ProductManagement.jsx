@@ -40,7 +40,6 @@ function ProductManagement() {
         name: formData.name.trim(),
         price: parseFloat(formData.price),
         stock_quantity: parseInt(formData.stock_quantity) || 0,
-        category: editingProduct ? editingProduct.category : 'supplements',
         description: formData.description.trim() || ''
       }
 
@@ -131,7 +130,6 @@ function ProductManagement() {
                 <th>Description</th>
                 <th>Price</th>
                 <th>Stock</th>
-                <th>Category</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -142,7 +140,6 @@ function ProductManagement() {
                   <td>{product.description}</td>
                   <td>₱{parseFloat(product.price).toFixed(2)}</td>
                   <td>{product.stock_quantity}</td>
-                  <td>{product.category}</td>
                   <td>
                     <Button variant="warning" size="sm" className="me-2" onClick={() => handleEdit(product)}>
                       Edit

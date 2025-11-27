@@ -39,6 +39,23 @@ function Dashboard({ user }) {
     amount: '',
     payment_method: 'Cash'
   })
+  const [showSaleEditModal, setShowSaleEditModal] = useState(false)
+  const [selectedSale, setSelectedSale] = useState(null)
+  const [editSaleData, setEditSaleData] = useState({
+    product_id: '',
+    quantity: 1
+  })
+  const [showCustomerEditModal, setShowCustomerEditModal] = useState(false)
+  const [selectedCustomer, setSelectedCustomer] = useState(null)
+  const [editCustomerData, setEditCustomerData] = useState({
+    name: '',
+    address: '',
+    contact_no: '',
+    payment_method: 'Cash',
+    amount: '',
+    partial_amount: '',
+    registration_type: 'Monthly'
+  })
 
   useEffect(() => {
     const fetchData = async () => {
@@ -82,10 +99,10 @@ function Dashboard({ user }) {
   }, [user, selectedDate])
 
   useEffect(() => {
-    if (showSalesModal) {
+    if (showSalesModal || showSaleEditModal) {
       fetchProducts()
     }
-  }, [showSalesModal])
+  }, [showSalesModal, showSaleEditModal])
 
   const fetchProducts = async () => {
     try {
@@ -279,6 +296,196 @@ function Dashboard({ user }) {
     }
   }
 
+  const handleSaleClick = (sale) => {
+    setSelectedSale(sale)
+    setEditSaleData({
+      product_id: sale.product_id,
+      quantity: sale.quantity
+    })
+    setShowSaleEditModal(true)
+    setError('')
+    setSuccess('')
+  }
+
+  const handleEditSaleChange = (e) => {
+    const { name, value } = e.target
+    setEditSaleData({ ...editSaleData, [name]: value })
+  }
+
+  const handleUpdateSale = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const product = products.find(p => p.id === editSaleData.product_id)
+      if (!product) {
+        setError('Please select a valid product')
+        setLoading(false)
+        return
+      }
+
+      const totalAmount = (parseFloat(product.price) * parseInt(editSaleData.quantity)).toFixed(2)
+
+      await api.put(`/sales/${selectedSale.id}`, {
+        product_id: editSaleData.product_id,
+        quantity: parseInt(editSaleData.quantity),
+        total_amount: totalAmount
+      })
+
+      setSuccess('Sale updated successfully!')
+      fetchProducts()
+      const statsResponse = await api.get('/stats/sales')
+      setStats(statsResponse.data)
+      fetchDateData(selectedDate)
+
+      setTimeout(() => {
+        setShowSaleEditModal(false)
+        setSelectedSale(null)
+        setSuccess('')
+      }, 1500)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to update sale')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteSale = async () => {
+    if (!selectedSale) return
+    
+    if (!window.confirm('Are you sure you want to delete this sale? This will restore the product stock.')) {
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      await api.delete(`/sales/${selectedSale.id}`)
+      setSuccess('Sale deleted successfully!')
+
+      const statsResponse = await api.get('/stats/sales')
+      setStats(statsResponse.data)
+      fetchDateData(selectedDate)
+
+      setTimeout(() => {
+        setShowSaleEditModal(false)
+        setSelectedSale(null)
+        setSuccess('')
+      }, 1500)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to delete sale')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCustomerClick = (customer) => {
+    setSelectedCustomer(customer)
+    setEditCustomerData({
+      name: customer.name || '',
+      address: customer.address || '',
+      contact_no: customer.contact_no || '',
+      payment_method: customer.payment_method || 'Cash',
+      amount: customer.amount ? customer.amount.toString() : '',
+      partial_amount: customer.partial_amount ? customer.partial_amount.toString() : '',
+      registration_type: customer.registration_type || 'Monthly'
+    })
+    setShowCustomerEditModal(true)
+    setError('')
+    setSuccess('')
+  }
+
+  const handleEditCustomerChange = (e) => {
+    const { name, value } = e.target
+    setEditCustomerData({ ...editCustomerData, [name]: value })
+  }
+
+  const handleUpdateCustomer = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      let amount = 0
+      let partialAmount = null
+      let remainingAmount = 0
+
+      if (editCustomerData.payment_method === 'Partial') {
+        amount = parseFloat(editCustomerData.amount || 0)
+        partialAmount = parseFloat(editCustomerData.partial_amount || 0)
+        remainingAmount = amount - partialAmount
+      } else if (editCustomerData.payment_method === 'Cash') {
+        amount = parseFloat(editCustomerData.amount || 0)
+        remainingAmount = 0
+      } else if (editCustomerData.payment_method === 'Gcash') {
+        amount = parseFloat(editCustomerData.amount || 0)
+        remainingAmount = 0
+      }
+
+      await api.put(`/customers/${selectedCustomer.id}`, {
+        name: editCustomerData.name,
+        address: editCustomerData.address,
+        contact_no: editCustomerData.contact_no,
+        payment_method: editCustomerData.payment_method,
+        amount: amount,
+        partial_amount: partialAmount,
+        remaining_amount: remainingAmount,
+        registration_type: editCustomerData.registration_type
+      })
+
+      setSuccess('Customer updated successfully!')
+      const statsResponse = await api.get('/stats/sales')
+      setStats(statsResponse.data)
+      fetchDateData(selectedDate)
+
+      setTimeout(() => {
+        setShowCustomerEditModal(false)
+        setSelectedCustomer(null)
+        setSuccess('')
+      }, 1500)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to update customer')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteCustomer = async () => {
+    if (!selectedCustomer) return
+    
+    if (!window.confirm('Are you sure you want to delete this customer registration?')) {
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      await api.delete(`/customers/${selectedCustomer.id}`)
+      setSuccess('Customer deleted successfully!')
+
+      const statsResponse = await api.get('/stats/sales')
+      setStats(statsResponse.data)
+      fetchDateData(selectedDate)
+
+      setTimeout(() => {
+        setShowCustomerEditModal(false)
+        setSelectedCustomer(null)
+        setSuccess('')
+      }, 1500)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to delete customer')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleSalesSubmit = async (e) => {
     e.preventDefault()
     if (!selectedProduct) {
@@ -419,7 +626,11 @@ function Dashboard({ user }) {
                         </thead>
                         <tbody>
                           {todayCustomers.map((customer) => (
-                            <tr key={customer.id}>
+                            <tr 
+                              key={customer.id}
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => handleCustomerClick(customer)}
+                            >
                               <td>{customer.name}</td>
                               <td>{customer.contact_no}</td>
                               <td>{customer.payment_method}</td>
@@ -484,8 +695,12 @@ function Dashboard({ user }) {
                         </thead>
                         <tbody>
                           {todaySales.map((sale) => (
-                            <tr key={sale.id}>
-                              <td>{sale.products?.name || 'N/A'}</td>
+                            <tr 
+                              key={sale.id}
+                              style={{ cursor: 'pointer' }}
+                              onClick={() => handleSaleClick(sale)}
+                            >
+                              <td>{sale.product?.name || 'N/A'}</td>
                               <td>{sale.quantity}</td>
                               <td>₱{parseFloat(sale.total_amount || 0).toFixed(2)}</td>
                               <td>
@@ -870,6 +1085,200 @@ function Dashboard({ user }) {
         </Modal.Body>
       </Modal>
 
+      {/* Sale Edit Modal */}
+      <Modal show={showSaleEditModal} onHide={() => {
+        setShowSaleEditModal(false)
+        setSelectedSale(null)
+        setError('')
+        setSuccess('')
+      }}>
+        <Modal.Header closeButton>
+          <Modal.Title>Edit Sale</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {error && <Alert variant="danger" onClose={() => setError('')} dismissible>{error}</Alert>}
+          {success && <Alert variant="success" onClose={() => setSuccess('')} dismissible>{success}</Alert>}
+          
+          <Form onSubmit={handleUpdateSale}>
+            <Form.Group className="mb-3">
+              <Form.Label>Product *</Form.Label>
+              <Form.Select
+                name="product_id"
+                value={editSaleData.product_id}
+                onChange={handleEditSaleChange}
+                required
+              >
+                <option value="">Select a product</option>
+                {products.map((product) => (
+                  <option key={product.id} value={product.id}>
+                    {product.name} - ₱{parseFloat(product.price).toFixed(2)} (Stock: {product.stock_quantity})
+                  </option>
+                ))}
+              </Form.Select>
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Quantity *</Form.Label>
+              <Form.Control
+                type="number"
+                min="1"
+                name="quantity"
+                value={editSaleData.quantity}
+                onChange={handleEditSaleChange}
+                required
+              />
+            </Form.Group>
+
+            {editSaleData.product_id && (
+              <Alert variant="info">
+                <strong>Total: ₱{(() => {
+                  const product = products.find(p => p.id === editSaleData.product_id)
+                  if (product && editSaleData.quantity) {
+                    return (parseFloat(product.price) * parseInt(editSaleData.quantity)).toFixed(2)
+                  }
+                  return '0.00'
+                })()}</strong>
+              </Alert>
+            )}
+
+            <div className="d-flex gap-2">
+              <Button variant="primary" type="submit" disabled={loading} className="flex-fill">
+                {loading ? 'Updating...' : 'Update Sale'}
+              </Button>
+              <Button variant="danger" onClick={handleDeleteSale} disabled={loading}>
+                Delete
+              </Button>
+            </div>
+          </Form>
+        </Modal.Body>
+      </Modal>
+
+      {/* Customer Edit Modal */}
+      <Modal show={showCustomerEditModal} onHide={() => {
+        setShowCustomerEditModal(false)
+        setSelectedCustomer(null)
+        setError('')
+        setSuccess('')
+      }} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Edit Customer Registration</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {error && <Alert variant="danger" onClose={() => setError('')} dismissible>{error}</Alert>}
+          {success && <Alert variant="success" onClose={() => setSuccess('')} dismissible>{success}</Alert>}
+          
+          <Form onSubmit={handleUpdateCustomer}>
+            <Form.Group className="mb-3">
+              <Form.Label>Name *</Form.Label>
+              <Form.Control
+                type="text"
+                name="name"
+                value={editCustomerData.name}
+                onChange={handleEditCustomerChange}
+                required
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Address</Form.Label>
+              <Form.Control
+                type="text"
+                name="address"
+                value={editCustomerData.address}
+                onChange={handleEditCustomerChange}
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Contact No *</Form.Label>
+              <Form.Control
+                type="tel"
+                name="contact_no"
+                value={editCustomerData.contact_no}
+                onChange={handleEditCustomerChange}
+                required
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Payment Method *</Form.Label>
+              <Form.Select
+                name="payment_method"
+                value={editCustomerData.payment_method}
+                onChange={handleEditCustomerChange}
+                required
+              >
+                <option value="Cash">Cash</option>
+                <option value="Gcash">Gcash</option>
+                <option value="Partial">Partial</option>
+              </Form.Select>
+            </Form.Group>
+
+            {editCustomerData.payment_method === 'Partial' && (
+              <>
+                <Form.Group className="mb-3">
+                  <Form.Label>Partial Amount *</Form.Label>
+                  <Form.Control
+                    type="number"
+                    step="0.01"
+                    name="partial_amount"
+                    value={editCustomerData.partial_amount}
+                    onChange={handleEditCustomerChange}
+                    required
+                  />
+                </Form.Group>
+                <Form.Group className="mb-3">
+                  <Form.Label>Total Amount *</Form.Label>
+                  <Form.Control
+                    type="number"
+                    step="0.01"
+                    name="amount"
+                    value={editCustomerData.amount}
+                    onChange={handleEditCustomerChange}
+                    required
+                  />
+                </Form.Group>
+              </>
+            )}
+
+            {(editCustomerData.payment_method === 'Cash' || editCustomerData.payment_method === 'Gcash') && (
+              <Form.Group className="mb-3">
+                <Form.Label>Amount *</Form.Label>
+                <Form.Control
+                  type="number"
+                  step="0.01"
+                  name="amount"
+                  value={editCustomerData.amount}
+                  onChange={handleEditCustomerChange}
+                  required
+                />
+              </Form.Group>
+            )}
+
+            <Form.Group className="mb-3">
+              <Form.Label>Registration Type *</Form.Label>
+              <Form.Select
+                name="registration_type"
+                value={editCustomerData.registration_type}
+                onChange={handleEditCustomerChange}
+                required
+              >
+                <option value="Monthly">Monthly</option>
+                <option value="Yearly">Yearly</option>
+              </Form.Select>
+            </Form.Group>
+
+            <div className="d-flex gap-2">
+              <Button variant="primary" type="submit" disabled={loading} className="flex-fill">
+                {loading ? 'Updating...' : 'Update Customer'}
+              </Button>
+              <Button variant="danger" onClick={handleDeleteCustomer} disabled={loading}>
+                Delete
+              </Button>
+            </div>
+          </Form>
+        </Modal.Body>
+      </Modal>
     </Container>
   )
 }
