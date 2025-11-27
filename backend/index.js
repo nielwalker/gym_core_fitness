@@ -94,29 +94,70 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' })
     }
     
-    // Format email from username
-    const email = username.includes('@') ? username : `${username}@gymcore.com`
+    // Format email from username (normalize to lowercase)
+    const email = username.includes('@') ? username.toLowerCase() : `${username.toLowerCase()}@gymcore.com`
     
-    // First, check if user exists in auth.users
-    let userExists = false
+    // First, check if user exists in auth.users and public.users
+    let userExistsInAuth = false
+    let userExistsInPublic = false
+    let foundAuthUser = null
+    let foundPublicUser = null
+    
     try {
+      // Check auth.users
       const { data: userList, error: listError } = await supabase.auth.admin.listUsers()
       if (!listError && userList?.users) {
-        userExists = userList.users.some(u => u.email === email || u.email === email.toLowerCase())
-        if (userExists) {
-          // Log user info for debugging (without password)
-          const foundUser = userList.users.find(u => u.email === email || u.email === email.toLowerCase())
+        foundAuthUser = userList.users.find(u => 
+          u.email?.toLowerCase() === email || 
+          u.email?.toLowerCase() === email.toLowerCase()
+        )
+        userExistsInAuth = !!foundAuthUser
+        
+        if (foundAuthUser) {
           console.log('User found in auth.users:', {
-            id: foundUser.id,
-            email: foundUser.email,
-            email_confirmed: !!foundUser.email_confirmed_at,
-            created_at: foundUser.created_at
+            id: foundAuthUser.id,
+            email: foundAuthUser.email,
+            email_confirmed: !!foundAuthUser.email_confirmed_at,
+            created_at: foundAuthUser.created_at
+          })
+        }
+      }
+      
+      // Check public.users by username
+      const { data: publicUsers, error: publicError } = await supabase
+        .from('users')
+        .select('id, name, username, email')
+        .ilike('username', username)
+        .limit(1)
+      
+      if (!publicError && publicUsers && publicUsers.length > 0) {
+        foundPublicUser = publicUsers[0]
+        userExistsInPublic = true
+        console.log('User found in public.users:', {
+          id: foundPublicUser.id,
+          username: foundPublicUser.username,
+          email: foundPublicUser.email
+        })
+        
+        // If user exists in public.users but not in auth.users, that's the problem
+        if (!userExistsInAuth) {
+          return res.status(401).json({ 
+            error: 'User account exists but authentication is not set up. Please contact an administrator to reset the account.' 
           })
         }
       }
     } catch (e) {
       console.error('Error checking user list:', e)
     }
+    
+    if (!userExistsInAuth) {
+      return res.status(401).json({ 
+        error: `User not found. Please check your username. Expected email format: ${email}` 
+      })
+    }
+    
+    // If user exists in auth, use the exact email from auth.users (case-sensitive)
+    const emailToUse = foundAuthUser ? foundAuthUser.email : email
     
     // Create a client with service role key to bypass email auth restrictions
     const adminSupabase = createClient(supabaseUrl, supabaseServiceKey, {
@@ -127,8 +168,9 @@ app.post('/api/auth/login', async (req, res) => {
     })
     
     // Try to sign in using service role (bypasses email auth restrictions)
+    // Use the exact email from auth.users to avoid case sensitivity issues
     const { data, error: authError } = await adminSupabase.auth.signInWithPassword({
-      email: email,
+      email: emailToUse,
       password: password,
     })
     
@@ -256,7 +298,16 @@ app.post('/api/users/create', async (req, res) => {
     }
     
     // Format email from username for Supabase Auth (required by Supabase)
-    const email = `${username}@gymcore.com`
+    // Normalize username to lowercase for consistency
+    const normalizedUsername = username.toLowerCase().trim()
+    const email = `${normalizedUsername}@gymcore.com`
+    
+    console.log('Creating staff user:', {
+      name,
+      username: normalizedUsername,
+      email,
+      passwordLength: password.length
+    })
     
     // Create user using Supabase Admin API with email auto-confirmed
     const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
@@ -265,7 +316,7 @@ app.post('/api/users/create', async (req, res) => {
       email_confirm: true, // Auto-confirm email so user can login immediately
       user_metadata: {
         name: name,
-        username: username
+        username: normalizedUsername
       }
     })
     
@@ -274,6 +325,12 @@ app.post('/api/users/create', async (req, res) => {
       return res.status(500).json({ error: 'Failed to create user', details: authError.message })
     }
     
+    console.log('User created successfully in auth.users:', {
+      id: authUser.user.id,
+      email: authUser.user.email,
+      email_confirmed: !!authUser.user.email_confirmed_at
+    })
+    
     // Wait a bit for the trigger to create the user record
     await new Promise(resolve => setTimeout(resolve, 500))
     
@@ -281,7 +338,7 @@ app.post('/api/users/create', async (req, res) => {
     try {
       const { data: updatedUser, error: updateError } = await supabase
         .from('users')
-        .update({ name, username })
+        .update({ name, username: normalizedUsername })
         .eq('id', authUser.user.id)
         .select()
         .single()
@@ -289,6 +346,12 @@ app.post('/api/users/create', async (req, res) => {
       if (updateError) {
         console.error('Error updating user record:', updateError)
         // User was created in auth, but update failed - not critical
+      } else {
+        console.log('User record updated in public.users:', {
+          id: updatedUser.id,
+          name: updatedUser.name,
+          username: updatedUser.username
+        })
       }
     } catch (updateError) {
       console.error('Error updating user record:', updateError)
@@ -299,11 +362,42 @@ app.post('/api/users/create', async (req, res) => {
       user: {
         id: authUser.user.id,
         name: name,
-        username: username,
+        username: normalizedUsername,
+        email: email,
         role: 'staff'
       },
-      message: 'Staff member created successfully and can login immediately'
+      message: `Staff member created successfully! They can login with username: ${normalizedUsername}`
     })
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error', details: error.message })
+  }
+})
+
+// Update user password
+app.post('/api/users/update-password', async (req, res) => {
+  try {
+    const { userId, newPassword } = req.body
+    
+    if (!userId || !newPassword) {
+      return res.status(400).json({ error: 'User ID and new password are required' })
+    }
+    
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters long' })
+    }
+    
+    // Update password using admin API
+    const { data: updatedUser, error: updateError } = await supabase.auth.admin.updateUserById(userId, {
+      password: newPassword
+    })
+    
+    if (updateError) {
+      console.error('Error updating password:', updateError)
+      return res.status(500).json({ error: 'Failed to update password', details: updateError.message })
+    }
+    
+    res.json({ success: true, message: 'Password updated successfully' })
   } catch (error) {
     console.error('Error:', error)
     res.status(500).json({ error: 'Internal server error', details: error.message })

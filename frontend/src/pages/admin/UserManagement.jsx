@@ -27,6 +27,11 @@ function UserManagement() {
     name: '',
     username: ''
   })
+  const [passwordData, setPasswordData] = useState({
+    newPassword: '',
+    confirmPassword: ''
+  })
+  const [showPasswordUpdate, setShowPasswordUpdate] = useState(false)
 
   useEffect(() => {
     fetchUsers()
@@ -145,6 +150,11 @@ function UserManagement() {
       name: staff.name || '',
       username: staff.username || ''
     })
+    setPasswordData({
+      newPassword: '',
+      confirmPassword: ''
+    })
+    setShowPasswordUpdate(false)
     setShowStaffModal(true)
     setError('')
     setSuccess('')
@@ -183,6 +193,47 @@ function UserManagement() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const handlePasswordUpdate = async () => {
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+
+    if (passwordData.newPassword.length < 6) {
+      setError('Password must be at least 6 characters long')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      await api.post('/users/update-password', {
+        userId: selectedStaff.id,
+        newPassword: passwordData.newPassword
+      })
+      setSuccess('Password updated successfully!')
+      setPasswordData({
+        newPassword: '',
+        confirmPassword: ''
+      })
+      setShowPasswordUpdate(false)
+      setTimeout(() => {
+        setSuccess('')
+      }, 3000)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to update password')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handlePasswordChange = (e) => {
+    const { name, value } = e.target
+    setPasswordData({ ...passwordData, [name]: value })
   }
 
   const handleStaffDelete = async () => {
@@ -491,6 +542,60 @@ function UserManagement() {
                     readOnly
                   />
                 </Form.Group>
+
+                <hr />
+
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <h6>Password Management</h6>
+                  <Button 
+                    variant={showPasswordUpdate ? "secondary" : "outline-primary"} 
+                    size="sm"
+                    onClick={() => {
+                      setShowPasswordUpdate(!showPasswordUpdate)
+                      setPasswordData({ newPassword: '', confirmPassword: '' })
+                      setError('')
+                    }}
+                  >
+                    {showPasswordUpdate ? 'Cancel' : 'Update Password'}
+                  </Button>
+                </div>
+
+                {showPasswordUpdate && (
+                  <>
+                    <Form.Group className="mb-3">
+                      <Form.Label>New Password *</Form.Label>
+                      <Form.Control
+                        type="password"
+                        name="newPassword"
+                        value={passwordData.newPassword}
+                        onChange={handlePasswordChange}
+                        placeholder="Enter new password (min 6 characters)"
+                        required
+                      />
+                    </Form.Group>
+
+                    <Form.Group className="mb-3">
+                      <Form.Label>Confirm New Password *</Form.Label>
+                      <Form.Control
+                        type="password"
+                        name="confirmPassword"
+                        value={passwordData.confirmPassword}
+                        onChange={handlePasswordChange}
+                        placeholder="Confirm new password"
+                        required
+                      />
+                    </Form.Group>
+
+                    <Button 
+                      variant="success" 
+                      onClick={handlePasswordUpdate} 
+                      disabled={loading || !passwordData.newPassword || !passwordData.confirmPassword}
+                      className="w-100 mb-3"
+                    >
+                      {loading ? 'Updating Password...' : 'Update Password'}
+                    </Button>
+                  </>
+                )}
 
                 <Alert variant="warning">
                   <strong>Note:</strong> Deleting a staff account will permanently remove their access. This action cannot be undone.
