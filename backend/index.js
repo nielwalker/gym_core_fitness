@@ -97,6 +97,27 @@ app.post('/api/auth/login', async (req, res) => {
     // Format email from username
     const email = username.includes('@') ? username : `${username}@gymcore.com`
     
+    // First, check if user exists in auth.users
+    let userExists = false
+    try {
+      const { data: userList, error: listError } = await supabase.auth.admin.listUsers()
+      if (!listError && userList?.users) {
+        userExists = userList.users.some(u => u.email === email || u.email === email.toLowerCase())
+        if (userExists) {
+          // Log user info for debugging (without password)
+          const foundUser = userList.users.find(u => u.email === email || u.email === email.toLowerCase())
+          console.log('User found in auth.users:', {
+            id: foundUser.id,
+            email: foundUser.email,
+            email_confirmed: !!foundUser.email_confirmed_at,
+            created_at: foundUser.created_at
+          })
+        }
+      }
+    } catch (e) {
+      console.error('Error checking user list:', e)
+    }
+    
     // Create a client with service role key to bypass email auth restrictions
     const adminSupabase = createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
@@ -113,23 +134,58 @@ app.post('/api/auth/login', async (req, res) => {
     
     if (authError) {
       console.error('Login error:', authError)
+      console.error('Attempted email:', email)
+      console.error('User exists in auth.users:', userExists)
+      
       if (authError.message.includes('Invalid login credentials')) {
-        return res.status(401).json({ error: 'Invalid username or password' })
+        // Provide more helpful error message
+        if (userExists) {
+          return res.status(401).json({ error: 'Invalid password. Please check your password and try again.' })
+        } else {
+          return res.status(401).json({ error: 'Invalid username or password. User not found.' })
+        }
       } else if (authError.message.includes('Email not confirmed')) {
-        return res.status(401).json({ error: 'Email not confirmed. Please contact an administrator.' })
-      } else if (authError.message.includes('Email logins are disabled') || authError.message.includes('disabled')) {
-        // If email auth is disabled, try to get user info and provide helpful error
+        // Try to confirm the email automatically
         try {
           const { data: userList } = await supabase.auth.admin.listUsers()
-          const user = userList?.users?.find(u => u.email === email)
+          const user = userList?.users?.find(u => u.email === email || u.email === email.toLowerCase())
           if (user) {
-            return res.status(403).json({ 
-              error: 'Email authentication is disabled in Supabase. Please enable email/password authentication in Supabase Dashboard → Authentication → Providers → Email.' 
+            // Auto-confirm email
+            await supabase.auth.admin.updateUserById(user.id, {
+              email_confirm: true
             })
+            // Retry login
+            const { data: retryData, error: retryError } = await adminSupabase.auth.signInWithPassword({
+              email: email,
+              password: password,
+            })
+            if (!retryError && retryData.user) {
+              // Get user details from users table
+              const { data: userData } = await supabase
+                .from('users')
+                .select('id, name, username, email, role')
+                .eq('id', retryData.user.id)
+                .single()
+              
+              return res.json({
+                user: {
+                  id: retryData.user.id,
+                  email: retryData.user.email,
+                  ...(userData && {
+                    name: userData.name,
+                    username: userData.username,
+                    role: userData.role || 'staff'
+                  })
+                },
+                session: retryData.session
+              })
+            }
           }
         } catch (e) {
-          // Ignore errors when checking user list
+          console.error('Error auto-confirming email:', e)
         }
+        return res.status(401).json({ error: 'Email not confirmed. Please contact an administrator.' })
+      } else if (authError.message.includes('Email logins are disabled') || authError.message.includes('disabled')) {
         return res.status(403).json({ 
           error: 'Email authentication is disabled. Please enable email/password authentication in Supabase Dashboard → Authentication → Providers → Email.' 
         })

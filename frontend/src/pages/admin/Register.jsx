@@ -61,8 +61,7 @@ function Register({ user }) {
         amount = parseFloat(customerData.amount || 0)
         remainingAmount = 0
       } else if (customerData.payment_method === 'Gcash') {
-        // For Gcash, amount is not required, set to 0
-        amount = 0
+        amount = parseFloat(customerData.amount || 0)
         remainingAmount = 0
       }
 
@@ -301,6 +300,20 @@ function Register({ user }) {
                 )}
 
                 {customerData.payment_method === 'Cash' && (
+                  <Form.Group className="mb-3">
+                    <Form.Label>Amount *</Form.Label>
+                    <Form.Control
+                      type="number"
+                      step="0.01"
+                      name="amount"
+                      value={customerData.amount}
+                      onChange={handleCustomerChange}
+                      required
+                    />
+                  </Form.Group>
+                )}
+
+                {customerData.payment_method === 'Gcash' && (
                   <Form.Group className="mb-3">
                     <Form.Label>Amount *</Form.Label>
                     <Form.Control
