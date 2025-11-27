@@ -236,6 +236,38 @@ function UserManagement() {
     setPasswordData({ ...passwordData, [name]: value })
   }
 
+  const handleFixAccount = async () => {
+    if (!window.confirm('This will create the authentication account if it\'s missing. Continue?')) {
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await api.post('/users/fix-account', {
+        userId: selectedStaff.id
+      })
+      
+      if (response.data.success) {
+        if (response.data.temporaryPassword) {
+          setSuccess(`Account fixed! Temporary password: ${response.data.temporaryPassword}. User must change password on first login.`)
+        } else {
+          setSuccess('Account fixed successfully! User can now login.')
+        }
+        fetchUsers()
+        setTimeout(() => {
+          setSuccess('')
+        }, 5000)
+      }
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to fix account')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleStaffDelete = async () => {
     if (!window.confirm(`Are you sure you want to delete staff member "${selectedStaff.name || selectedStaff.username}"? This action cannot be undone.`)) {
       return
@@ -596,6 +628,23 @@ function UserManagement() {
                     </Button>
                   </>
                 )}
+
+                <hr />
+                
+                <div className="mb-3">
+                  <Button 
+                    variant="outline-warning" 
+                    size="sm"
+                    onClick={handleFixAccount}
+                    disabled={loading}
+                    className="w-100"
+                  >
+                    {loading ? 'Fixing...' : 'Fix Account (Sync Auth)'}
+                  </Button>
+                  <small className="text-muted d-block mt-2">
+                    Use this if the user cannot login. This will create the auth account if missing.
+                  </small>
+                </div>
 
                 <Alert variant="warning">
                   <strong>Note:</strong> Deleting a staff account will permanently remove their access. This action cannot be undone.

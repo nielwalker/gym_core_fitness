@@ -139,11 +139,55 @@ app.post('/api/auth/login', async (req, res) => {
           email: foundPublicUser.email
         })
         
-        // If user exists in public.users but not in auth.users, that's the problem
-        if (!userExistsInAuth) {
-          return res.status(401).json({ 
-            error: 'User account exists but authentication is not set up. Please contact an administrator to reset the account.' 
+        // If user exists in public.users but not in auth.users, try to create auth user
+        if (!userExistsInAuth && foundPublicUser) {
+          console.log('User exists in public.users but not in auth.users. Attempting to create auth user...')
+          
+          // Try to create the auth user with the provided password
+          const publicUserEmail = foundPublicUser.email || email
+          const { data: newAuthUser, error: createAuthError } = await supabase.auth.admin.createUser({
+            id: foundPublicUser.id, // Use the same ID from public.users
+            email: publicUserEmail,
+            password: password,
+            email_confirm: true,
+            user_metadata: {
+              name: foundPublicUser.name,
+              username: foundPublicUser.username || username
+            }
           })
+          
+          if (createAuthError) {
+            console.error('Error creating auth user:', createAuthError)
+            // If creation fails (e.g., ID already exists), try to update existing or use different approach
+            if (createAuthError.message.includes('already registered') || createAuthError.message.includes('duplicate')) {
+              // User might exist with different email format, try to find it
+              const { data: allUsers } = await supabase.auth.admin.listUsers()
+              const existingAuthUser = allUsers?.users?.find(u => u.id === foundPublicUser.id)
+              
+              if (existingAuthUser) {
+                // User exists, use it
+                foundAuthUser = existingAuthUser
+                userExistsInAuth = true
+                console.log('Found existing auth user with matching ID:', existingAuthUser.email)
+              } else {
+                return res.status(401).json({ 
+                  error: 'Account setup issue detected. Please contact an administrator to reset your password.' 
+                })
+              }
+            } else {
+              return res.status(401).json({ 
+                error: 'Account setup issue detected. Please contact an administrator to reset your password.' 
+              })
+            }
+          } else {
+            // Successfully created auth user
+            foundAuthUser = newAuthUser.user
+            userExistsInAuth = true
+            console.log('Successfully created auth user:', {
+              id: newAuthUser.user.id,
+              email: newAuthUser.user.email
+            })
+          }
         }
       }
     } catch (e) {
@@ -177,11 +221,11 @@ app.post('/api/auth/login', async (req, res) => {
     if (authError) {
       console.error('Login error:', authError)
       console.error('Attempted email:', email)
-      console.error('User exists in auth.users:', userExists)
+      console.error('User exists in auth.users:', userExistsInAuth)
       
       if (authError.message.includes('Invalid login credentials')) {
         // Provide more helpful error message
-        if (userExists) {
+        if (userExistsInAuth) {
           return res.status(401).json({ error: 'Invalid password. Please check your password and try again.' })
         } else {
           return res.status(401).json({ error: 'Invalid username or password. User not found.' })
@@ -370,6 +414,75 @@ app.post('/api/users/create', async (req, res) => {
     })
   } catch (error) {
     console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error', details: error.message })
+  }
+})
+
+// Fix/sync user account (create auth user if missing)
+app.post('/api/users/fix-account', async (req, res) => {
+  try {
+    const { userId, password } = req.body
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' })
+    }
+    
+    // Get user from public.users
+    const { data: publicUser, error: publicError } = await supabase
+      .from('users')
+      .select('id, name, username, email')
+      .eq('id', userId)
+      .single()
+    
+    if (publicError || !publicUser) {
+      return res.status(404).json({ error: 'User not found in database' })
+    }
+    
+    // Check if user exists in auth.users
+    const { data: userList } = await supabase.auth.admin.listUsers()
+    const existingAuthUser = userList?.users?.find(u => u.id === userId)
+    
+    if (existingAuthUser) {
+      return res.json({ 
+        success: true, 
+        message: 'User already exists in auth. No action needed.',
+        user: existingAuthUser 
+      })
+    }
+    
+    // Create auth user
+    const email = publicUser.email || `${publicUser.username}@gymcore.com`
+    const userPassword = password || `TempPassword${Date.now()}` // Generate temp password if not provided
+    
+    const { data: newAuthUser, error: createError } = await supabase.auth.admin.createUser({
+      id: publicUser.id,
+      email: email,
+      password: userPassword,
+      email_confirm: true,
+      user_metadata: {
+        name: publicUser.name,
+        username: publicUser.username
+      }
+    })
+    
+    if (createError) {
+      console.error('Error creating auth user:', createError)
+      return res.status(500).json({ 
+        error: 'Failed to create auth user', 
+        details: createError.message 
+      })
+    }
+    
+    res.json({ 
+      success: true, 
+      message: password 
+        ? 'Auth user created successfully. User can now login.' 
+        : `Auth user created with temporary password. User must reset password on first login.`,
+      user: newAuthUser.user,
+      temporaryPassword: !password ? userPassword : undefined
+    })
+  } catch (error) {
+    console.error('Error fixing account:', error)
     res.status(500).json({ error: 'Internal server error', details: error.message })
   }
 })
