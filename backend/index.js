@@ -1339,7 +1339,7 @@ app.get('/api/sales/date', async (req, res) => {
     }, 0)
     const logbookRevenue = (logbook || []).reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0)
     const totalRevenue = salesRevenue + customerRevenue + logbookRevenue
-
+    
     res.json({
       sales: sales || [],
       customers: customers || [],

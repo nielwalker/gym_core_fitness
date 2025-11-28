@@ -102,6 +102,12 @@ function Sidebar({ user, onCollapseChange }) {
               {!isCollapsed && <span>Register Customer</span>}
             </Nav.Link>
             <Nav.Link 
+              className={`sidebar-link ${isActive('/users') ? 'active' : ''}`}
+              onClick={() => navigate('/users')}
+            >
+              {!isCollapsed && <span>Users</span>}
+            </Nav.Link>
+            <Nav.Link 
               className={`sidebar-link ${isActive('/products') ? 'active' : ''}`}
               onClick={() => navigate('/products')}
             >
@@ -123,6 +129,12 @@ function Sidebar({ user, onCollapseChange }) {
               onClick={() => navigate('/admin/register')}
             >
               {!isCollapsed && <span>Register</span>}
+            </Nav.Link>
+            <Nav.Link 
+              className={`sidebar-link ${isActive('/users') ? 'active' : ''}`}
+              onClick={() => navigate('/users')}
+            >
+              {!isCollapsed && <span>Users</span>}
             </Nav.Link>
             <Nav.Link 
               className={`sidebar-link ${isActive('/products') ? 'active' : ''}`}
