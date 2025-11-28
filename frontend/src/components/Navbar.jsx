@@ -131,12 +131,6 @@ function Sidebar({ user, onCollapseChange }) {
               {!isCollapsed && <span>Products</span>}
             </Nav.Link>
             <Nav.Link 
-              className={`sidebar-link ${isActive('/admin/users') ? 'active' : ''}`}
-              onClick={() => navigate('/admin/users')}
-            >
-              {!isCollapsed && <span>Users</span>}
-            </Nav.Link>
-            <Nav.Link 
               className={`sidebar-link ${isActive('/admin/sales') ? 'active' : ''}`}
               onClick={() => navigate('/admin/sales')}
             >

@@ -1,15 +1,21 @@
-import { Container, Card, Table, Nav, Modal, Button, Form, Alert } from 'react-bootstrap'
+import { Container, Card, Table, Modal, Button, Form, Alert } from 'react-bootstrap'
 import { useState, useEffect } from 'react'
 import api from '../../lib/axios'
+import { isHardcodedAdmin } from '../../lib/auth'
 
-function UserManagement() {
-  const [users, setUsers] = useState([])
+function UserManagement({ user }) {
+  // Admin only - check if user is admin
+  if (!user || !isHardcodedAdmin(user)) {
+    return (
+      <Container>
+        <Alert variant="danger">Access denied. Admin only.</Alert>
+      </Container>
+    )
+  }
+
   const [customers, setCustomers] = useState([])
-  const [activeTab, setActiveTab] = useState('staff')
   const [selectedCustomer, setSelectedCustomer] = useState(null)
-  const [selectedStaff, setSelectedStaff] = useState(null)
   const [showModal, setShowModal] = useState(false)
-  const [showStaffModal, setShowStaffModal] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -23,29 +29,10 @@ function UserManagement() {
     registration_type: 'Monthly',
     expiration_date: ''
   })
-  const [staffEditData, setStaffEditData] = useState({
-    name: '',
-    username: ''
-  })
-  const [passwordData, setPasswordData] = useState({
-    newPassword: '',
-    confirmPassword: ''
-  })
-  const [showPasswordUpdate, setShowPasswordUpdate] = useState(false)
 
   useEffect(() => {
-    fetchUsers()
     fetchCustomers()
   }, [])
-
-  const fetchUsers = async () => {
-    try {
-      const response = await api.get('/users')
-      setUsers(response.data)
-    } catch (error) {
-      console.error('Error fetching users:', error)
-    }
-  }
 
   const fetchCustomers = async () => {
     try {
@@ -144,152 +131,6 @@ function UserManagement() {
     }
   }
 
-  const handleStaffClick = (staff) => {
-    setSelectedStaff(staff)
-    setStaffEditData({
-      name: staff.name || '',
-      username: staff.username || ''
-    })
-    setPasswordData({
-      newPassword: '',
-      confirmPassword: ''
-    })
-    setShowPasswordUpdate(false)
-    setShowStaffModal(true)
-    setError('')
-    setSuccess('')
-  }
-
-  const handleCloseStaffModal = () => {
-    setShowStaffModal(false)
-    setSelectedStaff(null)
-    setError('')
-    setSuccess('')
-  }
-
-  const handleStaffEditChange = (e) => {
-    const { name, value } = e.target
-    setStaffEditData({ ...staffEditData, [name]: value })
-  }
-
-  const handleStaffUpdate = async () => {
-    setLoading(true)
-    setError('')
-    setSuccess('')
-
-    try {
-      await api.post('/users/update', {
-        userId: selectedStaff.id,
-        name: staffEditData.name,
-        username: staffEditData.username
-      })
-      setSuccess('Staff member updated successfully!')
-      fetchUsers()
-      setTimeout(() => {
-        handleCloseStaffModal()
-      }, 1500)
-    } catch (error) {
-      setError(error.response?.data?.error || 'Failed to update staff member')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handlePasswordUpdate = async () => {
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setError('Passwords do not match')
-      return
-    }
-
-    if (passwordData.newPassword.length < 6) {
-      setError('Password must be at least 6 characters long')
-      return
-    }
-
-    setLoading(true)
-    setError('')
-    setSuccess('')
-
-    try {
-      await api.post('/users/update-password', {
-        userId: selectedStaff.id,
-        newPassword: passwordData.newPassword
-      })
-      setSuccess('Password updated successfully!')
-      setPasswordData({
-        newPassword: '',
-        confirmPassword: ''
-      })
-      setShowPasswordUpdate(false)
-      setTimeout(() => {
-        setSuccess('')
-      }, 3000)
-    } catch (error) {
-      setError(error.response?.data?.error || 'Failed to update password')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handlePasswordChange = (e) => {
-    const { name, value } = e.target
-    setPasswordData({ ...passwordData, [name]: value })
-  }
-
-  const handleFixAccount = async () => {
-    if (!window.confirm('This will create the authentication account if it\'s missing. Continue?')) {
-      return
-    }
-
-    setLoading(true)
-    setError('')
-    setSuccess('')
-
-    try {
-      const response = await api.post('/users/fix-account', {
-        userId: selectedStaff.id
-      })
-      
-      if (response.data.success) {
-        if (response.data.temporaryPassword) {
-          setSuccess(`Account fixed! Temporary password: ${response.data.temporaryPassword}. User must change password on first login.`)
-        } else {
-          setSuccess('Account fixed successfully! User can now login.')
-        }
-        fetchUsers()
-        setTimeout(() => {
-          setSuccess('')
-        }, 5000)
-      }
-    } catch (error) {
-      setError(error.response?.data?.error || 'Failed to fix account')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleStaffDelete = async () => {
-    if (!window.confirm(`Are you sure you want to delete staff member "${selectedStaff.name || selectedStaff.username}"? This action cannot be undone.`)) {
-      return
-    }
-
-    setLoading(true)
-    setError('')
-    setSuccess('')
-
-    try {
-      await api.delete(`/users/${selectedStaff.id}`)
-      setSuccess('Staff member deleted successfully!')
-      fetchUsers()
-      setTimeout(() => {
-        handleCloseStaffModal()
-      }, 1500)
-    } catch (error) {
-      setError(error.response?.data?.error || 'Failed to delete staff member')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const isExpired = (expirationDate) => {
     if (!expirationDate) return false
@@ -308,44 +149,12 @@ function UserManagement() {
 
   return (
     <Container>
-      <h1 className="my-4">User Management</h1>
+      <h1 className="my-4">Customer Management</h1>
       <Card>
         <Card.Body>
-          <Nav variant="tabs" activeKey={activeTab} onSelect={(k) => setActiveTab(k)} className="mb-3">
-            <Nav.Item>
-              <Nav.Link eventKey="staff">Staff Users</Nav.Link>
-            </Nav.Item>
-            <Nav.Item>
-              <Nav.Link eventKey="customers">Customers</Nav.Link>
-            </Nav.Item>
-          </Nav>
-          
-          {activeTab === 'staff' && (
-              <Table striped bordered hover>
-                <thead>
-                  <tr>
-                    <th>Name</th>
-                    <th>Username</th>
-                    <th>Last Sign In</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((user) => (
-                    <tr 
-                      key={user.id}
-                      style={{ cursor: 'pointer' }}
-                      onClick={() => handleStaffClick(user)}
-                    >
-                      <td>{user.name || 'N/A'}</td>
-                      <td>{user.username || 'N/A'}</td>
-                      <td>{user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleString() : 'Never'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </Table>
-          )}
-
-          {activeTab === 'customers' && (
+          {customers.length === 0 ? (
+            <Alert variant="info">No customers registered yet.</Alert>
+          ) : (
               <Table striped bordered hover>
                 <thead>
                   <tr>
@@ -528,143 +337,6 @@ function UserManagement() {
         </Modal.Footer>
       </Modal>
 
-      {/* Staff Edit/Delete Modal */}
-      <Modal show={showStaffModal} onHide={handleCloseStaffModal} size="lg">
-        <Modal.Header closeButton>
-          <Modal.Title>Staff Account Management</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {error && <Alert variant="danger" onClose={() => setError('')} dismissible>{error}</Alert>}
-          {success && <Alert variant="success" onClose={() => setSuccess('')} dismissible>{success}</Alert>}
-
-          {selectedStaff && (
-            <>
-              <h5>Staff Details</h5>
-              <Form>
-                <Form.Group className="mb-3">
-                  <Form.Label>Name *</Form.Label>
-                  <Form.Control
-                    type="text"
-                    name="name"
-                    value={staffEditData.name}
-                    onChange={handleStaffEditChange}
-                    required
-                  />
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Username *</Form.Label>
-                  <Form.Control
-                    type="text"
-                    name="username"
-                    value={staffEditData.username}
-                    onChange={handleStaffEditChange}
-                    required
-                    pattern="[a-zA-Z0-9_]+"
-                    title="Username can only contain letters, numbers, and underscores"
-                  />
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Last Sign In</Form.Label>
-                  <Form.Control
-                    type="text"
-                    value={selectedStaff.last_sign_in_at ? new Date(selectedStaff.last_sign_in_at).toLocaleString() : 'Never'}
-                    disabled
-                    readOnly
-                  />
-                </Form.Group>
-
-                <hr />
-
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h6>Password Management</h6>
-                  <Button 
-                    variant={showPasswordUpdate ? "secondary" : "outline-primary"} 
-                    size="sm"
-                    onClick={() => {
-                      setShowPasswordUpdate(!showPasswordUpdate)
-                      setPasswordData({ newPassword: '', confirmPassword: '' })
-                      setError('')
-                    }}
-                  >
-                    {showPasswordUpdate ? 'Cancel' : 'Update Password'}
-                  </Button>
-                </div>
-
-                {showPasswordUpdate && (
-                  <>
-                    <Form.Group className="mb-3">
-                      <Form.Label>New Password *</Form.Label>
-                      <Form.Control
-                        type="password"
-                        name="newPassword"
-                        value={passwordData.newPassword}
-                        onChange={handlePasswordChange}
-                        placeholder="Enter new password (min 6 characters)"
-                        required
-                      />
-                    </Form.Group>
-
-                    <Form.Group className="mb-3">
-                      <Form.Label>Confirm New Password *</Form.Label>
-                      <Form.Control
-                        type="password"
-                        name="confirmPassword"
-                        value={passwordData.confirmPassword}
-                        onChange={handlePasswordChange}
-                        placeholder="Confirm new password"
-                        required
-                      />
-                    </Form.Group>
-
-                    <Button 
-                      variant="success" 
-                      onClick={handlePasswordUpdate} 
-                      disabled={loading || !passwordData.newPassword || !passwordData.confirmPassword}
-                      className="w-100 mb-3"
-                    >
-                      {loading ? 'Updating Password...' : 'Update Password'}
-                    </Button>
-                  </>
-                )}
-
-                <hr />
-                
-                <div className="mb-3">
-                  <Button 
-                    variant="outline-warning" 
-                    size="sm"
-                    onClick={handleFixAccount}
-                    disabled={loading}
-                    className="w-100"
-                  >
-                    {loading ? 'Fixing...' : 'Fix Account (Sync Auth)'}
-                  </Button>
-                  <small className="text-muted d-block mt-2">
-                    Use this if the user cannot login. This will create the auth account if missing.
-                  </small>
-                </div>
-
-                <Alert variant="warning">
-                  <strong>Note:</strong> Deleting a staff account will permanently remove their access. This action cannot be undone.
-                </Alert>
-              </Form>
-            </>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="primary" onClick={handleStaffUpdate} disabled={loading}>
-            {loading ? 'Updating...' : 'Update'}
-          </Button>
-          <Button variant="danger" onClick={handleStaffDelete} disabled={loading}>
-            {loading ? 'Deleting...' : 'Delete Account'}
-          </Button>
-          <Button variant="secondary" onClick={handleCloseStaffModal}>
-            Close
-          </Button>
-        </Modal.Footer>
-      </Modal>
     </Container>
   )
 }

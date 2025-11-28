@@ -6,7 +6,14 @@ import { isHardcodedAdmin } from '../../lib/auth'
 import { getTodayLocal, calculateExpirationDateLocal } from '../../lib/dateUtils'
 
 function Register({ user }) {
-  const [activeTab, setActiveTab] = useState('customer')
+  // Admin only - check if user is admin
+  if (!user || !isHardcodedAdmin(user)) {
+    return (
+      <Container>
+        <Alert variant="danger">Access denied. Admin only.</Alert>
+      </Container>
+    )
+  }
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -22,22 +29,9 @@ function Register({ user }) {
     registration_type: 'Monthly'
   })
 
-  // Staff form data
-  const [staffData, setStaffData] = useState({
-    name: '',
-    username: '',
-    password: '',
-    confirmPassword: ''
-  })
-
   const handleCustomerChange = (e) => {
     const { name, value } = e.target
     setCustomerData({ ...customerData, [name]: value })
-  }
-
-  const handleStaffChange = (e) => {
-    const { name, value } = e.target
-    setStaffData({ ...staffData, [name]: value })
   }
 
 
@@ -167,43 +161,6 @@ function Register({ user }) {
     }
   }
 
-  const handleStaffSubmit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    setSuccess('')
-
-    if (staffData.password !== staffData.confirmPassword) {
-      setError('Passwords do not match')
-      setLoading(false)
-      return
-    }
-
-    try {
-      // Create staff user via backend API (which auto-confirms email)
-      const response = await api.post('/users/create', {
-        name: staffData.name,
-        username: staffData.username,
-        password: staffData.password
-      })
-
-      if (response.data.success) {
-        setSuccess('Staff member registered successfully! They can login immediately.')
-        setStaffData({
-          name: '',
-          username: '',
-          password: '',
-          confirmPassword: ''
-        })
-      }
-    } catch (error) {
-      console.error('Registration error:', error)
-      const errorMessage = error.message || error.response?.data?.error || 'Failed to register staff member'
-      setError(errorMessage)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   return (
     <Container>
@@ -214,17 +171,7 @@ function Register({ user }) {
 
       <Card>
         <Card.Body>
-          <Nav variant="tabs" activeKey={activeTab} onSelect={(k) => setActiveTab(k)} className="mb-3">
-            <Nav.Item>
-              <Nav.Link eventKey="customer">Customer Registration</Nav.Link>
-            </Nav.Item>
-            <Nav.Item>
-              <Nav.Link eventKey="staff">Staff Registration</Nav.Link>
-            </Nav.Item>
-          </Nav>
-          
-          {activeTab === 'customer' && (
-              <Form onSubmit={handleCustomerSubmit}>
+          <Form onSubmit={handleCustomerSubmit}>
                 <Form.Group className="mb-3">
                   <Form.Label>Name *</Form.Label>
                   <Form.Control
@@ -344,63 +291,6 @@ function Register({ user }) {
                   {loading ? 'Registering...' : 'Register Customer'}
                 </Button>
               </Form>
-          )}
-
-          {activeTab === 'staff' && (
-              <Form onSubmit={handleStaffSubmit}>
-                <Form.Group className="mb-3">
-                  <Form.Label>Name *</Form.Label>
-                  <Form.Control
-                    type="text"
-                    name="name"
-                    value={staffData.name}
-                    onChange={handleStaffChange}
-                    required
-                  />
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Username *</Form.Label>
-                  <Form.Control
-                    type="text"
-                    name="username"
-                    value={staffData.username}
-                    onChange={handleStaffChange}
-                    required
-                    pattern="[a-zA-Z0-9_]+"
-                    title="Username can only contain letters, numbers, and underscores"
-                  />
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Password *</Form.Label>
-                  <Form.Control
-                    type="password"
-                    name="password"
-                    value={staffData.password}
-                    onChange={handleStaffChange}
-                    required
-                    minLength={6}
-                  />
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label>Confirm Password *</Form.Label>
-                  <Form.Control
-                    type="password"
-                    name="confirmPassword"
-                    value={staffData.confirmPassword}
-                    onChange={handleStaffChange}
-                    required
-                    minLength={6}
-                  />
-                </Form.Group>
-
-                <Button variant="primary" type="submit" disabled={loading} className="w-100">
-                  {loading ? 'Registering...' : 'Register Staff'}
-                </Button>
-              </Form>
-          )}
         </Card.Body>
       </Card>
     </Container>

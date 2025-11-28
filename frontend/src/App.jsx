@@ -155,7 +155,7 @@ function App() {
             />
             <Route
               path="/admin/users"
-              element={user ? <UserManagement /> : <Navigate to="/login" />}
+              element={user ? <UserManagement user={user} /> : <Navigate to="/login" />}
             />
             <Route
               path="/admin/sales"
