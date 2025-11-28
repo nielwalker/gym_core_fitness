@@ -1429,8 +1429,8 @@ app.post('/api/logbook', async (req, res) => {
         name,
         address: address || null,
         type,
-        amount: type === 'regular' ? null : (amount ? parseFloat(amount) : null),
-        payment_method: type === 'regular' ? null : (payment_method || null),
+        amount: amount ? parseFloat(amount) : null,
+        payment_method: payment_method || null,
         staff_id: staff_id || null
       })
       .select()
@@ -1454,10 +1454,9 @@ app.put('/api/logbook/:id', async (req, res) => {
     const { id } = req.params
     const updateData = req.body
     
-    // Handle amount for regular type
-    if (updateData.type === 'regular') {
-      updateData.amount = null
-      updateData.payment_method = null
+    // Ensure amount is parsed as float if provided
+    if (updateData.amount !== undefined) {
+      updateData.amount = updateData.amount ? parseFloat(updateData.amount) : null
     }
     
     const { data, error } = await supabase

@@ -154,9 +154,9 @@ function Dashboard({ user }) {
     setSuccess('')
 
     try {
-      // Validate amount if type is not regular
-      if (logbookData.type !== 'regular' && (!logbookData.amount || parseFloat(logbookData.amount) <= 0)) {
-        setError('Amount is required for student and walk-in types')
+      // Validate amount for all types
+      if (!logbookData.amount || parseFloat(logbookData.amount) <= 0) {
+        setError('Amount is required')
         setLoading(false)
         return
       }
@@ -174,8 +174,8 @@ function Dashboard({ user }) {
         name: logbookData.name,
         address: logbookData.address,
         type: logbookData.type,
-        amount: logbookData.type === 'regular' ? null : logbookData.amount,
-        payment_method: logbookData.type === 'regular' ? null : logbookData.payment_method,
+        amount: logbookData.amount ? parseFloat(logbookData.amount) : null,
+        payment_method: logbookData.payment_method || null,
         staff_id: staffId
       })
 
@@ -230,9 +230,9 @@ function Dashboard({ user }) {
     setSuccess('')
 
     try {
-      // Validate amount if type is not regular
-      if (editLogbookData.type !== 'regular' && (!editLogbookData.amount || parseFloat(editLogbookData.amount) <= 0)) {
-        setError('Amount is required for student and walk-in types')
+      // Validate amount for all types
+      if (!editLogbookData.amount || parseFloat(editLogbookData.amount) <= 0) {
+        setError('Amount is required')
         setLoading(false)
         return
       }
@@ -241,8 +241,8 @@ function Dashboard({ user }) {
         name: editLogbookData.name,
         address: editLogbookData.address,
         type: editLogbookData.type,
-        amount: editLogbookData.type === 'regular' ? null : editLogbookData.amount,
-        payment_method: editLogbookData.type === 'regular' ? null : editLogbookData.payment_method
+        amount: editLogbookData.amount ? parseFloat(editLogbookData.amount) : null,
+        payment_method: editLogbookData.payment_method || null
       })
 
       setSuccess('Logbook entry updated successfully!')
@@ -848,34 +848,30 @@ function Dashboard({ user }) {
               </Form.Select>
             </Form.Group>
 
-            {editLogbookData.type !== 'regular' && (
-              <>
-                <Form.Group className="mb-3">
-                  <Form.Label>Payment Method *</Form.Label>
-                  <Form.Select
-                    name="payment_method"
-                    value={editLogbookData.payment_method}
-                    onChange={handleEditLogbookChange}
-                    required
-                  >
-                    <option value="Cash">Cash</option>
-                    <option value="Gcash">Gcash</option>
-                  </Form.Select>
-                </Form.Group>
-                <Form.Group className="mb-3">
-                  <Form.Label>Amount *</Form.Label>
-                  <Form.Control
-                    type="number"
-                    step="0.01"
-                    name="amount"
-                    value={editLogbookData.amount}
-                    onChange={handleEditLogbookChange}
-                    required
-                    min="0"
-                  />
-                </Form.Group>
-              </>
-            )}
+            <Form.Group className="mb-3">
+              <Form.Label>Payment Method *</Form.Label>
+              <Form.Select
+                name="payment_method"
+                value={editLogbookData.payment_method}
+                onChange={handleEditLogbookChange}
+                required
+              >
+                <option value="Cash">Cash</option>
+                <option value="Gcash">Gcash</option>
+              </Form.Select>
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Amount *</Form.Label>
+              <Form.Control
+                type="number"
+                step="0.01"
+                name="amount"
+                value={editLogbookData.amount}
+                onChange={handleEditLogbookChange}
+                required
+                min="0"
+              />
+            </Form.Group>
 
             <div className="d-flex gap-2">
               <Button variant="warning" type="submit" disabled={loading} className="flex-fill">
@@ -952,34 +948,30 @@ function Dashboard({ user }) {
               </Form.Select>
             </Form.Group>
 
-            {logbookData.type !== 'regular' && (
-              <>
-                <Form.Group className="mb-3">
-                  <Form.Label>Payment Method *</Form.Label>
-                  <Form.Select
-                    name="payment_method"
-                    value={logbookData.payment_method}
-                    onChange={handleLogbookChange}
-                    required
-                  >
-                    <option value="Cash">Cash</option>
-                    <option value="Gcash">Gcash</option>
-                  </Form.Select>
-                </Form.Group>
-                <Form.Group className="mb-3">
-                  <Form.Label>Amount *</Form.Label>
-                  <Form.Control
-                    type="number"
-                    step="0.01"
-                    name="amount"
-                    value={logbookData.amount}
-                    onChange={handleLogbookChange}
-                    required
-                    min="0"
-                  />
-                </Form.Group>
-              </>
-            )}
+            <Form.Group className="mb-3">
+              <Form.Label>Payment Method *</Form.Label>
+              <Form.Select
+                name="payment_method"
+                value={logbookData.payment_method}
+                onChange={handleLogbookChange}
+                required
+              >
+                <option value="Cash">Cash</option>
+                <option value="Gcash">Gcash</option>
+              </Form.Select>
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Amount *</Form.Label>
+              <Form.Control
+                type="number"
+                step="0.01"
+                name="amount"
+                value={logbookData.amount}
+                onChange={handleLogbookChange}
+                required
+                min="0"
+              />
+            </Form.Group>
 
             <Button variant="info" type="submit" disabled={loading} className="w-100">
               {loading ? 'Adding...' : 'Add Entry'}
