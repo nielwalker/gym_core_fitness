@@ -1,4 +1,4 @@
-import { Container, Card, Table, Alert } from 'react-bootstrap'
+import { Container, Card, Table, Alert, Modal, Button, Form } from 'react-bootstrap'
 import { useState, useEffect } from 'react'
 import api from '../lib/axios'
 
@@ -6,6 +6,19 @@ function Users() {
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [selectedCustomer, setSelectedCustomer] = useState(null)
+  const [showModal, setShowModal] = useState(false)
+  const [editData, setEditData] = useState({
+    name: '',
+    address: '',
+    contact_no: '',
+    payment_method: 'Cash',
+    amount: '',
+    partial_amount: '',
+    registration_type: 'Monthly',
+    expiration_date: ''
+  })
 
   useEffect(() => {
     fetchCustomers()
@@ -41,6 +54,122 @@ function Users() {
       month: 'short',
       day: 'numeric'
     })
+  }
+
+  const handleCustomerClick = (customer) => {
+    setSelectedCustomer(customer)
+    setEditData({
+      name: customer.name || '',
+      address: customer.address || '',
+      contact_no: customer.contact_no || '',
+      payment_method: customer.payment_method || 'Cash',
+      amount: customer.amount ? customer.amount.toString() : '',
+      partial_amount: customer.partial_amount ? customer.partial_amount.toString() : '',
+      registration_type: customer.registration_type || 'Monthly',
+      expiration_date: customer.expiration_date || ''
+    })
+    setShowModal(true)
+    setError('')
+    setSuccess('')
+  }
+
+  const handleCloseModal = () => {
+    setShowModal(false)
+    setSelectedCustomer(null)
+    setError('')
+    setSuccess('')
+  }
+
+  const handleEditChange = (e) => {
+    const { name, value } = e.target
+    setEditData({ ...editData, [name]: value })
+  }
+
+  const handleUpdate = async () => {
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      let amount = 0
+      let partialAmount = null
+      let remainingAmount = 0
+
+      if (editData.payment_method === 'Partial') {
+        amount = parseFloat(editData.amount || 0)
+        partialAmount = parseFloat(editData.partial_amount || 0)
+        remainingAmount = amount - partialAmount
+      } else if (editData.payment_method === 'Cash') {
+        amount = parseFloat(editData.amount || 0)
+        remainingAmount = 0
+      } else if (editData.payment_method === 'Gcash') {
+        amount = parseFloat(editData.amount || 0)
+        remainingAmount = 0
+      }
+
+      await api.put(`/customers/${selectedCustomer.id}`, {
+        name: editData.name,
+        address: editData.address,
+        contact_no: editData.contact_no,
+        payment_method: editData.payment_method,
+        amount: amount,
+        partial_amount: partialAmount,
+        remaining_amount: remainingAmount,
+        registration_type: editData.registration_type,
+        expiration_date: editData.expiration_date
+      })
+      setSuccess('Customer updated successfully!')
+      fetchCustomers()
+      setTimeout(() => {
+        handleCloseModal()
+      }, 1500)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to update customer')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete customer "${selectedCustomer.name}"? This action cannot be undone.`)) {
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      await api.delete(`/customers/${selectedCustomer.id}`)
+      setSuccess('Customer deleted successfully!')
+      fetchCustomers()
+      setTimeout(() => {
+        handleCloseModal()
+      }, 1500)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to delete customer')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handlePaid = async () => {
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      await api.put(`/customers/${selectedCustomer.id}/paid`, {})
+      setSuccess('Remaining balance cleared successfully!')
+      fetchCustomers()
+      setTimeout(() => {
+        setSuccess('')
+      }, 1500)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to clear remaining balance')
+    } finally {
+      setLoading(false)
+    }
   }
 
   if (loading) {
@@ -86,7 +215,11 @@ function Users() {
                   {customers.map((customer) => {
                     const expired = isExpired(customer.expiration_date)
                     return (
-                      <tr key={customer.id}>
+                      <tr 
+                        key={customer.id}
+                        style={{ cursor: 'pointer' }}
+                        onClick={() => handleCustomerClick(customer)}
+                      >
                         <td>
                           <span 
                             className={`badge ${expired ? 'bg-danger' : 'bg-success'}`}
@@ -119,6 +252,157 @@ function Users() {
           )}
         </Card.Body>
       </Card>
+
+      {/* Edit/Delete Modal */}
+      <Modal show={showModal} onHide={handleCloseModal} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Customer Details</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {error && <Alert variant="danger" onClose={() => setError('')} dismissible>{error}</Alert>}
+          {success && <Alert variant="success" onClose={() => setSuccess('')} dismissible>{success}</Alert>}
+
+          {selectedCustomer && (
+            <>
+              <Form>
+                <Form.Group className="mb-3">
+                  <Form.Label>Name *</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="name"
+                    value={editData.name}
+                    onChange={handleEditChange}
+                    required
+                  />
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Address *</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="address"
+                    value={editData.address}
+                    onChange={handleEditChange}
+                    required
+                  />
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Contact No *</Form.Label>
+                  <Form.Control
+                    type="tel"
+                    name="contact_no"
+                    value={editData.contact_no}
+                    onChange={handleEditChange}
+                    required
+                  />
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Payment Method *</Form.Label>
+                  <Form.Select
+                    name="payment_method"
+                    value={editData.payment_method}
+                    onChange={handleEditChange}
+                    required
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="Gcash">Gcash</option>
+                    <option value="Partial">Partial</option>
+                  </Form.Select>
+                </Form.Group>
+
+                {editData.payment_method === 'Partial' && (
+                  <>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Partial Amount *</Form.Label>
+                      <Form.Control
+                        type="number"
+                        step="0.01"
+                        name="partial_amount"
+                        value={editData.partial_amount}
+                        onChange={handleEditChange}
+                        required
+                      />
+                    </Form.Group>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Total Amount *</Form.Label>
+                      <Form.Control
+                        type="number"
+                        step="0.01"
+                        name="amount"
+                        value={editData.amount}
+                        onChange={handleEditChange}
+                        required
+                      />
+                    </Form.Group>
+                  </>
+                )}
+
+                {(editData.payment_method === 'Cash' || editData.payment_method === 'Gcash') && (
+                  <Form.Group className="mb-3">
+                    <Form.Label>Amount *</Form.Label>
+                    <Form.Control
+                      type="number"
+                      step="0.01"
+                      name="amount"
+                      value={editData.amount}
+                      onChange={handleEditChange}
+                      required
+                    />
+                  </Form.Group>
+                )}
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Registration Type *</Form.Label>
+                  <Form.Select
+                    name="registration_type"
+                    value={editData.registration_type}
+                    onChange={handleEditChange}
+                    required
+                  >
+                    <option value="Monthly">Monthly</option>
+                    <option value="Membership">Membership</option>
+                  </Form.Select>
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Expiration Date *</Form.Label>
+                  <Form.Control
+                    type="date"
+                    name="expiration_date"
+                    value={editData.expiration_date}
+                    onChange={handleEditChange}
+                    required
+                  />
+                </Form.Group>
+
+                {selectedCustomer.remaining_amount > 0 && (
+                  <Alert variant="warning">
+                    <strong>Remaining Balance: ₱{parseFloat(selectedCustomer.remaining_amount).toFixed(2)}</strong>
+                  </Alert>
+                )}
+              </Form>
+            </>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          {selectedCustomer && selectedCustomer.remaining_amount > 0 && (
+            <Button variant="success" onClick={handlePaid} disabled={loading}>
+              Mark as Paid
+            </Button>
+          )}
+          <Button variant="primary" onClick={handleUpdate} disabled={loading}>
+            {loading ? 'Updating...' : 'Update'}
+          </Button>
+          <Button variant="danger" onClick={handleDelete} disabled={loading}>
+            {loading ? 'Deleting...' : 'Delete'}
+          </Button>
+          <Button variant="secondary" onClick={handleCloseModal}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
     </Container>
   )
 }
