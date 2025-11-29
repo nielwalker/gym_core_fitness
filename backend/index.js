@@ -1599,6 +1599,8 @@ app.post('/api/expenses', async (req, res) => {
   try {
     const { date, name, amount, staff_id } = req.body
     
+    console.log('Creating expense with data:', { date, name, amount, staff_id })
+    
     if (!name || amount === undefined) {
       return res.status(400).json({ error: 'Name and amount are required' })
     }
@@ -1606,14 +1608,38 @@ app.post('/api/expenses', async (req, res) => {
     // Use provided date or current date
     const expenseDate = date || new Date().toISOString().split('T')[0]
     
+    // Validate amount
+    const parsedAmount = parseFloat(amount)
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ error: 'Amount must be a valid positive number' })
+    }
+    
+    // Prepare insert data
+    const insertData = {
+      date: expenseDate,
+      name: name.trim(),
+      amount: parsedAmount
+    }
+    
+    // Only add staff_id if it's a valid UUID
+    if (staff_id && typeof staff_id === 'string' && staff_id.length > 0) {
+      // Basic UUID validation
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      if (uuidRegex.test(staff_id)) {
+        insertData.staff_id = staff_id
+      } else {
+        console.warn('Invalid staff_id format, setting to null:', staff_id)
+        insertData.staff_id = null
+      }
+    } else {
+      insertData.staff_id = null
+    }
+    
+    console.log('Inserting expense:', insertData)
+    
     const { data, error } = await supabase
       .from('expenses')
-      .insert({
-        date: expenseDate,
-        name,
-        amount: parseFloat(amount),
-        staff_id: staff_id || null
-      })
+      .insert(insertData)
       .select(`
         *,
         staff:staff_id (
@@ -1626,18 +1652,43 @@ app.post('/api/expenses', async (req, res) => {
     
     if (error) {
       console.error('Error creating expense:', error)
+      console.error('Error details:', JSON.stringify(error, null, 2))
+      
       // Check if table doesn't exist
       if (error.code === '42P01' || error.message?.includes('does not exist')) {
         return res.status(500).json({ 
           error: 'Expenses table not found. Please run the migration SQL file: backend/database/migration_create_expenses.sql' 
         })
       }
-      return res.status(500).json({ error: 'Failed to create expense', details: error.message })
+      
+      // Check for foreign key constraint errors
+      if (error.code === '23503' || error.message?.includes('foreign key')) {
+        return res.status(400).json({ 
+          error: 'Invalid staff ID. The staff member does not exist.',
+          details: error.message 
+        })
+      }
+      
+      // Check for constraint violations
+      if (error.code === '23514' || error.message?.includes('check constraint')) {
+        return res.status(400).json({ 
+          error: 'Invalid data. Please check your input values.',
+          details: error.message 
+        })
+      }
+      
+      return res.status(500).json({ 
+        error: 'Failed to create expense', 
+        details: error.message,
+        code: error.code 
+      })
     }
     
+    console.log('Expense created successfully:', data)
     res.json(data)
   } catch (error) {
-    console.error('Error:', error)
+    console.error('Unexpected error creating expense:', error)
+    console.error('Error stack:', error.stack)
     res.status(500).json({ error: 'Internal server error', details: error.message })
   }
 })

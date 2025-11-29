@@ -54,8 +54,18 @@ function Expenses() {
 
     try {
       setLoading(true)
-      const user = JSON.parse(localStorage.getItem('gymcore_user') || '{}')
+      let user = null
+      try {
+        const userStr = localStorage.getItem('gymcore_user')
+        if (userStr) {
+          user = JSON.parse(userStr)
+        }
+      } catch (e) {
+        console.warn('Error parsing user from localStorage:', e)
+      }
+      
       const currentDate = getTodayLocal()
+      const staffId = user?.id || null
       
       if (editingExpense) {
         // When editing, keep the original date
@@ -63,7 +73,7 @@ function Expenses() {
           date: editingExpense.date,
           name: formData.name,
           amount: parseFloat(formData.amount),
-          staff_id: user.id || null
+          staff_id: staffId
         })
         setSuccess('Expense updated successfully')
       } else {
@@ -72,7 +82,7 @@ function Expenses() {
           date: currentDate,
           name: formData.name,
           amount: parseFloat(formData.amount),
-          staff_id: user.id || null
+          staff_id: staffId
         })
         setSuccess('Expense added successfully')
       }
@@ -86,7 +96,9 @@ function Expenses() {
       fetchExpenses()
     } catch (error) {
       console.error('Error saving expense:', error)
-      setError(error.response?.data?.error || 'Failed to save expense')
+      const errorMessage = error.response?.data?.error || error.response?.data?.details || error.message || 'Failed to save expense'
+      const errorDetails = error.response?.data?.details ? ` (${error.response.data.details})` : ''
+      setError(`${errorMessage}${errorDetails}`)
     } finally {
       setLoading(false)
     }
