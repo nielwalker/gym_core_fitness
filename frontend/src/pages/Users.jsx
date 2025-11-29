@@ -1,4 +1,4 @@
-import { Container, Card, Table, Alert, Modal, Button, Form } from 'react-bootstrap'
+import { Container, Card, Table, Alert, Modal, Button, Form, InputGroup } from 'react-bootstrap'
 import { useState, useEffect } from 'react'
 import api from '../lib/axios'
 
@@ -7,6 +7,7 @@ function Users() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [searchTerm, setSearchTerm] = useState('')
   const [selectedCustomer, setSelectedCustomer] = useState(null)
   const [showModal, setShowModal] = useState(false)
   const [editData, setEditData] = useState({
@@ -184,16 +185,56 @@ function Users() {
     )
   }
 
+  // Filter customers based on search term
+  const filteredCustomers = customers.filter((customer) => {
+    if (!searchTerm.trim()) return true
+    const searchLower = searchTerm.toLowerCase().trim()
+    return customer.name?.toLowerCase().includes(searchLower)
+  })
+
   return (
     <Container>
       <h1 className="my-4">Users</h1>
       
       {error && <Alert variant="danger" onClose={() => setError('')} dismissible>{error}</Alert>}
 
+      <Card className="mb-3">
+        <Card.Body>
+          <Form.Group>
+            <Form.Label><strong>Search User</strong></Form.Label>
+            <InputGroup>
+              <Form.Control
+                type="text"
+                placeholder="Search by name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              {searchTerm && (
+                <Button 
+                  variant="outline-secondary" 
+                  onClick={() => setSearchTerm('')}
+                >
+                  Clear
+                </Button>
+              )}
+            </InputGroup>
+            {searchTerm && (
+              <Form.Text className="text-muted">
+                Showing {filteredCustomers.length} result(s) for "{searchTerm}"
+              </Form.Text>
+            )}
+          </Form.Group>
+        </Card.Body>
+      </Card>
+
       <Card>
         <Card.Body>
           {customers.length === 0 ? (
             <Alert variant="info">No users registered yet.</Alert>
+          ) : filteredCustomers.length === 0 ? (
+            <Alert variant="warning">
+              No users found matching "{searchTerm}". Try a different search term.
+            </Alert>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <Table striped bordered hover responsive>
@@ -212,7 +253,7 @@ function Users() {
                   </tr>
                 </thead>
                 <tbody>
-                  {customers.map((customer) => {
+                  {filteredCustomers.map((customer) => {
                     const expired = isExpired(customer.expiration_date)
                     return (
                       <tr 
