@@ -66,11 +66,19 @@ function SalesTracking() {
       <h1 className="my-4">Sales Tracking</h1>
       
       <Row className="mb-4">
-        <Col md={12}>
+        <Col md={6}>
           <Card className="bg-success text-white">
             <Card.Body>
               <Card.Title>Today's Revenue</Card.Title>
               <h3>₱{stats.todayRevenue?.toFixed(2) || '0.00'}</h3>
+            </Card.Body>
+          </Card>
+        </Col>
+        <Col md={6}>
+          <Card className="bg-primary text-white">
+            <Card.Body>
+              <Card.Title>Net Revenue</Card.Title>
+              <h3>₱{stats.todayNetRevenue?.toFixed(2) || stats.todayRevenue?.toFixed(2) || '0.00'}</h3>
             </Card.Body>
           </Card>
         </Col>

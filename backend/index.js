@@ -1413,6 +1413,7 @@ app.get('/api/stats/sales', async (req, res) => {
     today.setHours(0, 0, 0, 0)
     const todayISO = today.toISOString()
     const tomorrowISO = new Date(today.getTime() + 24 * 60 * 60 * 1000).toISOString()
+    const todayDateStr = today.toISOString().split('T')[0]
     
     // Get today's sales
     const { data: todaySales, error: salesError } = await supabase
@@ -1424,7 +1425,7 @@ app.get('/api/stats/sales', async (req, res) => {
     // Get today's customer registrations
     const { data: todayCustomers, error: customersError } = await supabase
       .from('customers')
-      .select('amount')
+      .select('amount, payment_method, partial_amount')
       .gte('created_at', todayISO)
       .lt('created_at', tomorrowISO)
     
@@ -1435,9 +1436,39 @@ app.get('/api/stats/sales', async (req, res) => {
       .gte('created_at', todayISO)
       .lt('created_at', tomorrowISO)
     
+    // Get today's expenses
+    let todayExpenses = []
+    let expensesError = null
+    try {
+      const { data: expensesData, error: expensesErr } = await supabase
+        .from('expenses')
+        .select('amount')
+        .eq('date', todayDateStr)
+      
+      todayExpenses = expensesData || []
+      expensesError = expensesErr
+      
+      // If table doesn't exist, just continue with empty expenses
+      if (expensesError && (expensesError.code === '42P01' || expensesError.message?.includes('does not exist'))) {
+        console.warn('Expenses table not found, continuing without expenses')
+        todayExpenses = []
+        expensesError = null
+      }
+    } catch (expErr) {
+      console.warn('Error fetching expenses (table may not exist):', expErr.message)
+      todayExpenses = []
+      expensesError = null
+    }
+    
     if (salesError || customersError || logbookError) {
       console.error('Error fetching stats:', { salesError, customersError, logbookError })
       return res.status(500).json({ error: 'Failed to fetch statistics' })
+    }
+    
+    // Only fail on expenses if it's not a missing table error
+    if (expensesError && expensesError.code !== '42P01' && !expensesError.message?.includes('does not exist')) {
+      console.error('Error fetching expenses:', expensesError)
+      return res.status(500).json({ error: 'Failed to fetch expenses statistics' })
     }
     
     const salesRevenue = (todaySales || []).reduce((sum, sale) => sum + (parseFloat(sale.total_amount) || 0), 0)
@@ -1451,9 +1482,13 @@ app.get('/api/stats/sales', async (req, res) => {
     const logbookRevenue = (todayLogbook || []).reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0)
     
     const todayRevenue = salesRevenue + customerRevenue + logbookRevenue
+    const todayExpensesTotal = (todayExpenses || []).reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0)
+    const todayNetRevenue = todayRevenue - todayExpensesTotal
     
     res.json({
       todayRevenue,
+      todayExpenses: todayExpensesTotal,
+      todayNetRevenue,
       todaySalesCount: (todaySales || []).length
     })
   } catch (error) {
