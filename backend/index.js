@@ -1325,22 +1325,47 @@ app.get('/api/sales/date', async (req, res) => {
     
     // Get expenses for this date
     const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    const { data: expenses, error: expensesError } = await supabase
-      .from('expenses')
-      .select(`
-        *,
-        staff:staff_id (
-          name,
-          username,
-          email
-        )
-      `)
-      .eq('date', dateStr)
-      .order('created_at', { ascending: false })
+    let expenses = []
+    let expensesError = null
     
-    if (salesError || customersError || logbookError || expensesError) {
-      console.error('Error fetching date data:', { salesError, customersError, logbookError, expensesError })
+    try {
+      const { data: expensesData, error: expensesErr } = await supabase
+        .from('expenses')
+        .select(`
+          *,
+          staff:staff_id (
+            name,
+            username,
+            email
+          )
+        `)
+        .eq('date', dateStr)
+        .order('created_at', { ascending: false })
+      
+      expenses = expensesData || []
+      expensesError = expensesErr
+      
+      // If table doesn't exist, just log and continue with empty expenses
+      if (expensesError && (expensesError.code === '42P01' || expensesError.message?.includes('does not exist'))) {
+        console.warn('Expenses table not found. Please run migration_create_expenses.sql. Continuing without expenses data.')
+        expenses = []
+        expensesError = null
+      }
+    } catch (expErr) {
+      console.warn('Error fetching expenses (table may not exist):', expErr.message)
+      expenses = []
+      expensesError = null
+    }
+    
+    if (salesError || customersError || logbookError) {
+      console.error('Error fetching date data:', { salesError, customersError, logbookError })
       return res.status(500).json({ error: 'Failed to fetch date data' })
+    }
+    
+    // Only fail on expenses error if it's not a missing table error
+    if (expensesError && expensesError.code !== '42P01' && !expensesError.message?.includes('does not exist')) {
+      console.error('Error fetching expenses:', expensesError)
+      return res.status(500).json({ error: 'Failed to fetch expenses data', details: expensesError.message })
     }
     
     // Calculate revenue for the date
@@ -1544,27 +1569,28 @@ app.get('/api/expenses', async (req, res) => {
       .order('created_at', { ascending: false })
     
     if (date) {
-      // Filter by date
-      const [year, month, day] = date.split('-').map(Number)
-      const startDate = new Date(year, month - 1, day, 0, 0, 0, 0)
-      const endDate = new Date(year, month - 1, day, 23, 59, 59, 999)
-      const startISO = startDate.toISOString().split('T')[0]
-      const endISO = endDate.toISOString().split('T')[0]
-      
-      query = query.gte('date', startISO).lte('date', endISO)
+      // Filter by date - use exact date match for DATE type
+      const dateStr = date.split('T')[0] // Handle ISO strings if needed
+      query = query.eq('date', dateStr)
     }
     
     const { data, error } = await query
     
     if (error) {
       console.error('Error fetching expenses:', error)
-      return res.status(500).json({ error: 'Failed to fetch expenses' })
+      // Check if table doesn't exist
+      if (error.code === '42P01' || error.message?.includes('does not exist')) {
+        return res.status(500).json({ 
+          error: 'Expenses table not found. Please run the migration SQL file: backend/database/migration_create_expenses.sql' 
+        })
+      }
+      return res.status(500).json({ error: 'Failed to fetch expenses', details: error.message })
     }
     
     res.json(data || [])
   } catch (error) {
     console.error('Error:', error)
-    res.status(500).json({ error: 'Internal server error' })
+    res.status(500).json({ error: 'Internal server error', details: error.message })
   }
 })
 
@@ -1597,13 +1623,19 @@ app.post('/api/expenses', async (req, res) => {
     
     if (error) {
       console.error('Error creating expense:', error)
-      return res.status(500).json({ error: 'Failed to create expense' })
+      // Check if table doesn't exist
+      if (error.code === '42P01' || error.message?.includes('does not exist')) {
+        return res.status(500).json({ 
+          error: 'Expenses table not found. Please run the migration SQL file: backend/database/migration_create_expenses.sql' 
+        })
+      }
+      return res.status(500).json({ error: 'Failed to create expense', details: error.message })
     }
     
     res.json(data)
   } catch (error) {
     console.error('Error:', error)
-    res.status(500).json({ error: 'Internal server error' })
+    res.status(500).json({ error: 'Internal server error', details: error.message })
   }
 })
 
