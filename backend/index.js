@@ -1618,21 +1618,33 @@ app.post('/api/expenses', async (req, res) => {
     const insertData = {
       date: expenseDate,
       name: name.trim(),
-      amount: parsedAmount
+      amount: parsedAmount,
+      staff_id: null // Default to null
     }
     
-    // Only add staff_id if it's a valid UUID
+    // Only add staff_id if it's a valid UUID and exists in users table
     if (staff_id && typeof staff_id === 'string' && staff_id.length > 0) {
       // Basic UUID validation
       const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
       if (uuidRegex.test(staff_id)) {
-        insertData.staff_id = staff_id
+        // Check if user exists in public.users table
+        const { data: userExists, error: userCheckError } = await supabase
+          .from('users')
+          .select('id')
+          .eq('id', staff_id)
+          .single()
+        
+        if (!userCheckError && userExists) {
+          insertData.staff_id = staff_id
+          console.log('Valid staff_id found, using:', staff_id)
+        } else {
+          console.warn('Staff ID does not exist in users table, setting to null:', staff_id)
+          insertData.staff_id = null
+        }
       } else {
         console.warn('Invalid staff_id format, setting to null:', staff_id)
         insertData.staff_id = null
       }
-    } else {
-      insertData.staff_id = null
     }
     
     console.log('Inserting expense:', insertData)
@@ -1663,6 +1675,35 @@ app.post('/api/expenses', async (req, res) => {
       
       // Check for foreign key constraint errors
       if (error.code === '23503' || error.message?.includes('foreign key')) {
+        // If it's a staff_id foreign key error, set it to null and retry
+        if (error.message?.includes('staff_id')) {
+          console.warn('Foreign key constraint on staff_id, setting to null and retrying')
+          insertData.staff_id = null
+          
+          const { data: retryData, error: retryError } = await supabase
+            .from('expenses')
+            .insert(insertData)
+            .select(`
+              *,
+              staff:staff_id (
+                name,
+                username,
+                email
+              )
+            `)
+            .single()
+          
+          if (retryError) {
+            console.error('Error on retry:', retryError)
+            return res.status(500).json({ 
+              error: 'Failed to create expense', 
+              details: retryError.message 
+            })
+          }
+          
+          return res.json(retryData)
+        }
+        
         return res.status(400).json({ 
           error: 'Invalid staff ID. The staff member does not exist.',
           details: error.message 
@@ -1703,7 +1744,37 @@ app.put('/api/expenses/:id', async (req, res) => {
     if (date !== undefined) updateData.date = date
     if (name !== undefined) updateData.name = name
     if (amount !== undefined) updateData.amount = parseFloat(amount)
-    if (staff_id !== undefined) updateData.staff_id = staff_id
+    
+    // Handle staff_id validation
+    if (staff_id !== undefined) {
+      if (staff_id === null || staff_id === '') {
+        updateData.staff_id = null
+      } else if (typeof staff_id === 'string' && staff_id.length > 0) {
+        // Basic UUID validation
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+        if (uuidRegex.test(staff_id)) {
+          // Check if user exists in public.users table
+          const { data: userExists, error: userCheckError } = await supabase
+            .from('users')
+            .select('id')
+            .eq('id', staff_id)
+            .single()
+          
+          if (!userCheckError && userExists) {
+            updateData.staff_id = staff_id
+          } else {
+            console.warn('Staff ID does not exist in users table, setting to null:', staff_id)
+            updateData.staff_id = null
+          }
+        } else {
+          console.warn('Invalid staff_id format, setting to null:', staff_id)
+          updateData.staff_id = null
+        }
+      } else {
+        updateData.staff_id = null
+      }
+    }
+    
     updateData.updated_at = new Date().toISOString()
     
     const { data, error } = await supabase
