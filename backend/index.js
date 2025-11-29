@@ -1598,6 +1598,11 @@ app.get('/api/expenses', async (req, res) => {
           name,
           username,
           email
+        ),
+        product:product_id (
+          id,
+          name,
+          price
         )
       `)
       .order('date', { ascending: false })
@@ -1632,29 +1637,59 @@ app.get('/api/expenses', async (req, res) => {
 // Create expense
 app.post('/api/expenses', async (req, res) => {
   try {
-    const { date, name, amount, staff_id } = req.body
+    const { date, name, amount, expense_type, product_id, staff_id } = req.body
     
-    console.log('Creating expense with data:', { date, name, amount, staff_id })
+    console.log('Creating expense with data:', { date, name, amount, expense_type, product_id, staff_id })
     
-    if (!name || amount === undefined) {
-      return res.status(400).json({ error: 'Name and amount are required' })
+    if (!name) {
+      return res.status(400).json({ error: 'Name is required' })
+    }
+
+    const expenseType = expense_type || 'Cash'
+    
+    if (expenseType !== 'Cash' && expenseType !== 'Product') {
+      return res.status(400).json({ error: 'Expense type must be Cash or Product' })
     }
     
     // Use provided date or current date
     const expenseDate = date || new Date().toISOString().split('T')[0]
     
-    // Validate amount
-    const parsedAmount = parseFloat(amount)
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      return res.status(400).json({ error: 'Amount must be a valid positive number' })
-    }
-    
     // Prepare insert data
     const insertData = {
       date: expenseDate,
       name: name.trim(),
-      amount: parsedAmount,
+      expense_type: expenseType,
       staff_id: null // Default to null
+    }
+
+    // Handle amount and product_id based on expense type
+    if (expenseType === 'Cash') {
+      if (amount === undefined || amount === null || amount === '') {
+        return res.status(400).json({ error: 'Amount is required for Cash expenses' })
+      }
+      const parsedAmount = parseFloat(amount)
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ error: 'Amount must be a valid positive number' })
+      }
+      insertData.amount = parsedAmount
+      insertData.product_id = null
+    } else if (expenseType === 'Product') {
+      if (!product_id) {
+        return res.status(400).json({ error: 'Product is required for Product expenses' })
+      }
+      // Get product price
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .select('price')
+        .eq('id', product_id)
+        .single()
+      
+      if (productError || !product) {
+        return res.status(400).json({ error: 'Product not found' })
+      }
+      
+      insertData.amount = parseFloat(product.price)
+      insertData.product_id = product_id
     }
     
     // Only add staff_id if it's a valid UUID and exists in users table
@@ -1693,6 +1728,11 @@ app.post('/api/expenses', async (req, res) => {
           name,
           username,
           email
+        ),
+        product:product_id (
+          id,
+          name,
+          price
         )
       `)
       .single()
@@ -1724,6 +1764,11 @@ app.post('/api/expenses', async (req, res) => {
                 name,
                 username,
                 email
+              ),
+              product:product_id (
+                id,
+                name,
+                price
               )
             `)
             .single()
@@ -1773,12 +1818,45 @@ app.post('/api/expenses', async (req, res) => {
 app.put('/api/expenses/:id', async (req, res) => {
   try {
     const { id } = req.params
-    const { date, name, amount, staff_id } = req.body
+    const { date, name, amount, expense_type, product_id, staff_id } = req.body
     
     const updateData = {}
     if (date !== undefined) updateData.date = date
     if (name !== undefined) updateData.name = name
-    if (amount !== undefined) updateData.amount = parseFloat(amount)
+    if (expense_type !== undefined) updateData.expense_type = expense_type
+
+    // Handle amount and product_id based on expense type
+    if (expense_type === 'Cash') {
+      if (amount !== undefined) {
+        const parsedAmount = parseFloat(amount)
+        if (isNaN(parsedAmount) || parsedAmount <= 0) {
+          return res.status(400).json({ error: 'Amount must be a valid positive number' })
+        }
+        updateData.amount = parsedAmount
+        updateData.product_id = null
+      }
+    } else if (expense_type === 'Product') {
+      if (product_id !== undefined) {
+        if (!product_id) {
+          return res.status(400).json({ error: 'Product is required for Product expenses' })
+        }
+        // Get product price
+        const { data: product, error: productError } = await supabase
+          .from('products')
+          .select('price')
+          .eq('id', product_id)
+          .single()
+        
+        if (productError || !product) {
+          return res.status(400).json({ error: 'Product not found' })
+        }
+        
+        updateData.amount = parseFloat(product.price)
+        updateData.product_id = product_id
+      }
+    } else if (amount !== undefined) {
+      updateData.amount = parseFloat(amount)
+    }
     
     // Handle staff_id validation
     if (staff_id !== undefined) {
@@ -1822,13 +1900,18 @@ app.put('/api/expenses/:id', async (req, res) => {
           name,
           username,
           email
+        ),
+        product:product_id (
+          id,
+          name,
+          price
         )
       `)
       .single()
     
     if (error) {
       console.error('Error updating expense:', error)
-      return res.status(500).json({ error: 'Failed to update expense' })
+      return res.status(500).json({ error: 'Failed to update expense', details: error.message })
     }
     
     res.json(data)

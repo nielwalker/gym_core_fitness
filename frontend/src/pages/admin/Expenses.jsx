@@ -5,6 +5,7 @@ import { getTodayLocal, formatDateLocal } from '../../lib/dateUtils'
 
 function Expenses() {
   const [expenses, setExpenses] = useState([])
+  const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -12,13 +13,25 @@ function Expenses() {
   const [showModal, setShowModal] = useState(false)
   const [editingExpense, setEditingExpense] = useState(null)
   const [formData, setFormData] = useState({
+    expense_type: 'Cash',
     name: '',
-    amount: ''
+    amount: '',
+    product_id: ''
   })
 
   useEffect(() => {
     fetchExpenses()
+    fetchProducts()
   }, [selectedDate])
+
+  const fetchProducts = async () => {
+    try {
+      const response = await api.get('/products')
+      setProducts(response.data || [])
+    } catch (error) {
+      console.error('Error fetching products:', error)
+    }
+  }
 
   const fetchExpenses = async () => {
     try {
@@ -47,9 +60,22 @@ function Expenses() {
     setError('')
     setSuccess('')
 
-    if (!formData.name || !formData.amount) {
-      setError('Please fill in all fields')
+    // Validation based on expense type
+    if (!formData.name) {
+      setError('Please enter a name')
       return
+    }
+
+    if (formData.expense_type === 'Cash') {
+      if (!formData.amount || parseFloat(formData.amount) <= 0) {
+        setError('Please enter a valid amount')
+        return
+      }
+    } else if (formData.expense_type === 'Product') {
+      if (!formData.product_id) {
+        setError('Please select a product')
+        return
+      }
     }
 
     try {
@@ -67,31 +93,37 @@ function Expenses() {
       const currentDate = getTodayLocal()
       const staffId = user?.id || null
       
+      const expenseData = {
+        date: editingExpense ? editingExpense.date : currentDate,
+        name: formData.name,
+        expense_type: formData.expense_type,
+        staff_id: staffId
+      }
+
+      if (formData.expense_type === 'Cash') {
+        expenseData.amount = parseFloat(formData.amount)
+        expenseData.product_id = null
+      } else if (formData.expense_type === 'Product') {
+        const selectedProduct = products.find(p => p.id === formData.product_id)
+        expenseData.amount = selectedProduct ? parseFloat(selectedProduct.price) : 0
+        expenseData.product_id = formData.product_id
+      }
+
       if (editingExpense) {
-        // When editing, keep the original date
-        await api.put(`/expenses/${editingExpense.id}`, {
-          date: editingExpense.date,
-          name: formData.name,
-          amount: parseFloat(formData.amount),
-          staff_id: staffId
-        })
+        await api.put(`/expenses/${editingExpense.id}`, expenseData)
         setSuccess('Expense updated successfully')
       } else {
-        // When creating, use current date
-        await api.post('/expenses', {
-          date: currentDate,
-          name: formData.name,
-          amount: parseFloat(formData.amount),
-          staff_id: staffId
-        })
+        await api.post('/expenses', expenseData)
         setSuccess('Expense added successfully')
       }
       
       setShowModal(false)
       setEditingExpense(null)
       setFormData({
+        expense_type: 'Cash',
         name: '',
-        amount: ''
+        amount: '',
+        product_id: ''
       })
       fetchExpenses()
     } catch (error) {
@@ -107,8 +139,10 @@ function Expenses() {
   const handleEdit = (expense) => {
     setEditingExpense(expense)
     setFormData({
+      expense_type: expense.expense_type || 'Cash',
       name: expense.name,
-      amount: expense.amount.toString()
+      amount: expense.amount ? expense.amount.toString() : '',
+      product_id: expense.product_id || ''
     })
     setShowModal(true)
   }
@@ -135,8 +169,10 @@ function Expenses() {
     setShowModal(false)
     setEditingExpense(null)
     setFormData({
+      expense_type: 'Cash',
       name: '',
-      amount: ''
+      amount: '',
+      product_id: ''
     })
     setError('')
     setSuccess('')
@@ -144,8 +180,10 @@ function Expenses() {
 
   const handleAddNew = () => {
     setFormData({
+      expense_type: 'Cash',
       name: '',
-      amount: ''
+      amount: '',
+      product_id: ''
     })
     setShowModal(true)
   }
@@ -209,7 +247,14 @@ function Expenses() {
                   {expenses.map((expense) => (
                     <tr key={expense.id}>
                       <td>{formatDateLocal(expense.date)}</td>
-                      <td>{expense.name}</td>
+                      <td>
+                        {expense.name}
+                        {expense.expense_type === 'Product' && expense.product && (
+                          <small className="text-muted d-block">
+                            Product: {expense.product.name}
+                          </small>
+                        )}
+                      </td>
                       <td>₱{parseFloat(expense.amount).toFixed(2)}</td>
                       <td>
                         {expense.staff_id && expense.staff ? 
@@ -266,29 +311,63 @@ function Expenses() {
             )}
             
             <Form.Group className="mb-3">
+              <Form.Label>Option *</Form.Label>
+              <Form.Select
+                name="expense_type"
+                value={formData.expense_type}
+                onChange={handleInputChange}
+                required
+              >
+                <option value="Cash">Cash</option>
+                <option value="Product">Product</option>
+              </Form.Select>
+            </Form.Group>
+
+            <Form.Group className="mb-3">
               <Form.Label>Name *</Form.Label>
               <Form.Control
                 type="text"
                 name="name"
                 value={formData.name}
                 onChange={handleInputChange}
-                placeholder="e.g., Electricity, Water, Supplies"
+                placeholder="Person in charge of the expense"
                 required
               />
             </Form.Group>
 
-            <Form.Group className="mb-3">
-              <Form.Label>Amount *</Form.Label>
-              <Form.Control
-                type="number"
-                step="0.01"
-                name="amount"
-                value={formData.amount}
-                onChange={handleInputChange}
-                placeholder="0.00"
-                required
-              />
-            </Form.Group>
+            {formData.expense_type === 'Cash' && (
+              <Form.Group className="mb-3">
+                <Form.Label>Amount *</Form.Label>
+                <Form.Control
+                  type="number"
+                  step="0.01"
+                  name="amount"
+                  value={formData.amount}
+                  onChange={handleInputChange}
+                  placeholder="0.00"
+                  required
+                />
+              </Form.Group>
+            )}
+
+            {formData.expense_type === 'Product' && (
+              <Form.Group className="mb-3">
+                <Form.Label>Product *</Form.Label>
+                <Form.Select
+                  name="product_id"
+                  value={formData.product_id}
+                  onChange={handleInputChange}
+                  required
+                >
+                  <option value="">Select a product</option>
+                  {products.map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.name} - ₱{parseFloat(product.price).toFixed(2)}
+                    </option>
+                  ))}
+                </Form.Select>
+              </Form.Group>
+            )}
           </Form>
         </Modal.Body>
         <Modal.Footer>
