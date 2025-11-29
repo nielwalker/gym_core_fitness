@@ -12,7 +12,6 @@ function Expenses() {
   const [showModal, setShowModal] = useState(false)
   const [editingExpense, setEditingExpense] = useState(null)
   const [formData, setFormData] = useState({
-    date: getTodayLocal(),
     name: '',
     amount: ''
   })
@@ -48,7 +47,7 @@ function Expenses() {
     setError('')
     setSuccess('')
 
-    if (!formData.date || !formData.name || !formData.amount) {
+    if (!formData.name || !formData.amount) {
       setError('Please fill in all fields')
       return
     }
@@ -56,18 +55,21 @@ function Expenses() {
     try {
       setLoading(true)
       const user = JSON.parse(localStorage.getItem('gymcore_user') || '{}')
+      const currentDate = getTodayLocal()
       
       if (editingExpense) {
+        // When editing, keep the original date
         await api.put(`/expenses/${editingExpense.id}`, {
-          date: formData.date,
+          date: editingExpense.date,
           name: formData.name,
           amount: parseFloat(formData.amount),
           staff_id: user.id || null
         })
         setSuccess('Expense updated successfully')
       } else {
+        // When creating, use current date
         await api.post('/expenses', {
-          date: formData.date,
+          date: currentDate,
           name: formData.name,
           amount: parseFloat(formData.amount),
           staff_id: user.id || null
@@ -78,7 +80,6 @@ function Expenses() {
       setShowModal(false)
       setEditingExpense(null)
       setFormData({
-        date: selectedDate,
         name: '',
         amount: ''
       })
@@ -94,7 +95,6 @@ function Expenses() {
   const handleEdit = (expense) => {
     setEditingExpense(expense)
     setFormData({
-      date: expense.date,
       name: expense.name,
       amount: expense.amount.toString()
     })
@@ -123,7 +123,6 @@ function Expenses() {
     setShowModal(false)
     setEditingExpense(null)
     setFormData({
-      date: selectedDate,
       name: '',
       amount: ''
     })
@@ -133,7 +132,6 @@ function Expenses() {
 
   const handleAddNew = () => {
     setFormData({
-      date: selectedDate,
       name: '',
       amount: ''
     })
@@ -249,19 +247,14 @@ function Expenses() {
           {success && <Alert variant="success" onClose={() => setSuccess('')} dismissible>{success}</Alert>}
           
           <Form onSubmit={handleSubmit}>
+            {editingExpense && (
+              <Alert variant="info" className="mb-3">
+                <strong>Date:</strong> {formatDateLocal(editingExpense.date)}
+              </Alert>
+            )}
+            
             <Form.Group className="mb-3">
-              <Form.Label>Date *</Form.Label>
-              <Form.Control
-                type="date"
-                name="date"
-                value={formData.date}
-                onChange={handleInputChange}
-                required
-              />
-            </Form.Group>
-
-            <Form.Group className="mb-3">
-              <Form.Label>Expense Name *</Form.Label>
+              <Form.Label>Name *</Form.Label>
               <Form.Control
                 type="text"
                 name="name"

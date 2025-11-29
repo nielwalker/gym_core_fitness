@@ -1599,14 +1599,17 @@ app.post('/api/expenses', async (req, res) => {
   try {
     const { date, name, amount, staff_id } = req.body
     
-    if (!date || !name || amount === undefined) {
-      return res.status(400).json({ error: 'Date, name, and amount are required' })
+    if (!name || amount === undefined) {
+      return res.status(400).json({ error: 'Name and amount are required' })
     }
+    
+    // Use provided date or current date
+    const expenseDate = date || new Date().toISOString().split('T')[0]
     
     const { data, error } = await supabase
       .from('expenses')
       .insert({
-        date,
+        date: expenseDate,
         name,
         amount: parseFloat(amount),
         staff_id: staff_id || null
