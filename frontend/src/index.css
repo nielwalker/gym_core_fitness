@@ -8,9 +8,47 @@ body {
   margin: 0;
   min-height: 100vh;
   background-color: #f8f9fa;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
 }
 
 #root {
   min-height: 100vh;
+}
+
+/* Allow text selection in input fields and textareas */
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* Prevent text cursor on non-interactive elements */
+h1, h2, h3, h4, h5, h6, p, span, div, td, th, label {
+  cursor: default;
+}
+
+/* Only show pointer cursor on clickable elements */
+button, a, [role="button"], .btn, .table tbody tr[style*="cursor: pointer"] {
+  cursor: pointer;
+}
+
+/* Prevent text selection on tables */
+table {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Allow selection in table cells only when they contain inputs */
+table td input, table td textarea {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
 }
 
