@@ -263,7 +263,13 @@ function Users() {
                       >
                         <td>
                           <span 
-                            className={`badge ${expired ? 'bg-danger' : 'bg-success'}`}
+                            className={`badge ${expired ? 'bg-danger text-white' : 'bg-success text-white'}`}
+                            style={{
+                              fontSize: '0.875rem',
+                              padding: '0.35em 0.65em',
+                              fontWeight: '500',
+                              backgroundColor: expired ? '#dc3545' : '#28a745'
+                            }}
                           >
                             {expired ? 'Expired' : 'Active'}
                           </span>
