@@ -12,6 +12,7 @@ import AdminDashboard from './pages/admin/AdminDashboard'
 import Register from './pages/admin/Register'
 import UserManagement from './pages/admin/UserManagement'
 import SalesTracking from './pages/admin/SalesTracking'
+import Expenses from './pages/admin/Expenses'
 import Users from './pages/Users'
 
 function App() {
@@ -165,6 +166,10 @@ function App() {
             <Route
               path="/admin/sales"
               element={user ? <SalesTracking /> : <Navigate to="/login" />}
+            />
+            <Route
+              path="/admin/expenses"
+              element={user ? <Expenses /> : <Navigate to="/login" />}
             />
             <Route path="/" element={<Navigate to={user ? "/dashboard" : "/login"} />} />
           </Routes>

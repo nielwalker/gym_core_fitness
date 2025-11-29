@@ -10,6 +10,7 @@ function SalesTracking() {
   const [daySales, setDaySales] = useState([])
   const [dayCustomers, setDayCustomers] = useState([])
   const [dayLogbook, setDayLogbook] = useState([])
+  const [dayExpenses, setDayExpenses] = useState([])
   const [dayStats, setDayStats] = useState({})
 
   useEffect(() => {
@@ -47,12 +48,14 @@ function SalesTracking() {
       setDaySales(response.data.sales || [])
       setDayCustomers(response.data.customers || [])
       setDayLogbook(response.data.logbook || [])
+      setDayExpenses(response.data.expenses || [])
       setDayStats(response.data.stats || {})
     } catch (error) {
       console.error('Error fetching day sales:', error)
       setDaySales([])
       setDayCustomers([])
       setDayLogbook([])
+      setDayExpenses([])
       setDayStats({})
     }
   }
@@ -92,6 +95,8 @@ function SalesTracking() {
               </h5>
               <p className="text-muted mb-0">
                 Revenue: ₱{dayStats.revenue?.toFixed(2) || '0.00'} | 
+                Expenses: ₱{dayStats.expenses?.toFixed(2) || '0.00'} | 
+                Net Revenue: ₱{dayStats.netRevenue?.toFixed(2) || '0.00'} | 
                 Total: {dayStats.count || 0} 
                 ({dayStats.salesCount || 0} Sales, {dayStats.customersCount || 0} Registrations, {dayStats.logbookCount || 0} Log Book)
               </p>
@@ -102,9 +107,9 @@ function SalesTracking() {
 
       <Card>
         <Card.Body>
-          {daySales.length === 0 && dayCustomers.length === 0 && dayLogbook.length === 0 ? (
+          {daySales.length === 0 && dayCustomers.length === 0 && dayLogbook.length === 0 && dayExpenses.length === 0 ? (
             <Alert variant="info" className="text-center">
-              <strong>No sales recorded for this date</strong>
+              <strong>No sales or expenses recorded for this date</strong>
             </Alert>
           ) : (
             <Table striped bordered hover>
@@ -124,9 +129,9 @@ function SalesTracking() {
                     <td>{new Date(sale.created_at).toLocaleString()}</td>
                     <td><span className="badge bg-primary">Product Sale</span></td>
                     <td>
-                      {sale.products?.name || 'N/A'} (Qty: {sale.quantity})
+                      {sale.product?.name || 'N/A'} (Qty: {sale.quantity})
                       <br />
-                      <small className="text-muted">Unit Price: ₱{sale.products?.price ? parseFloat(sale.products.price).toFixed(2) : '0.00'}</small>
+                      <small className="text-muted">Unit Price: ₱{sale.product?.price ? parseFloat(sale.product.price).toFixed(2) : '0.00'}</small>
                     </td>
                     <td>₱{parseFloat(sale.total_amount).toFixed(2)}</td>
                     <td>
@@ -185,11 +190,36 @@ function SalesTracking() {
                     </td>
                   </tr>
                 ))}
+                
+                {/* Expenses */}
+                {dayExpenses.map((expense) => (
+                  <tr key={`expense-${expense.id}`}>
+                    <td>{new Date(expense.created_at).toLocaleString()}</td>
+                    <td><span className="badge bg-danger">Expense</span></td>
+                    <td>{expense.name}</td>
+                    <td className="text-danger">-₱{parseFloat(expense.amount).toFixed(2)}</td>
+                    <td>
+                      {expense.staff_id && expense.staff ? 
+                        (expense.staff.name || expense.staff.username || expense.staff.email || 'Staff') : 
+                        'Admin'}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
               <tfoot>
                 <tr>
                   <td colSpan="3" className="text-end fw-bold">Total Revenue:</td>
                   <td className="fw-bold">₱{dayStats.revenue?.toFixed(2) || '0.00'}</td>
+                  <td></td>
+                </tr>
+                <tr>
+                  <td colSpan="3" className="text-end fw-bold text-danger">Total Expenses:</td>
+                  <td className="fw-bold text-danger">-₱{dayStats.expenses?.toFixed(2) || '0.00'}</td>
+                  <td></td>
+                </tr>
+                <tr className="table-success">
+                  <td colSpan="3" className="text-end fw-bold">Net Revenue:</td>
+                  <td className="fw-bold">₱{dayStats.netRevenue?.toFixed(2) || '0.00'}</td>
                   <td></td>
                 </tr>
               </tfoot>

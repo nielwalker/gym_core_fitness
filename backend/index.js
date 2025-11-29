@@ -1323,8 +1323,23 @@ app.get('/api/sales/date', async (req, res) => {
       .lte('created_at', endISO)
       .order('created_at', { ascending: false })
     
-    if (salesError || customersError || logbookError) {
-      console.error('Error fetching date data:', { salesError, customersError, logbookError })
+    // Get expenses for this date
+    const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+    const { data: expenses, error: expensesError } = await supabase
+      .from('expenses')
+      .select(`
+        *,
+        staff:staff_id (
+          name,
+          username,
+          email
+        )
+      `)
+      .eq('date', dateStr)
+      .order('created_at', { ascending: false })
+    
+    if (salesError || customersError || logbookError || expensesError) {
+      console.error('Error fetching date data:', { salesError, customersError, logbookError, expensesError })
       return res.status(500).json({ error: 'Failed to fetch date data' })
     }
     
@@ -1340,15 +1355,23 @@ app.get('/api/sales/date', async (req, res) => {
     const logbookRevenue = (logbook || []).reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0)
     const totalRevenue = salesRevenue + customerRevenue + logbookRevenue
     
+    // Calculate expenses for the date
+    const totalExpenses = (expenses || []).reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0)
+    const netRevenue = totalRevenue - totalExpenses
+    
     res.json({
       sales: sales || [],
       customers: customers || [],
       logbook: logbook || [],
+      expenses: expenses || [],
       stats: {
         revenue: totalRevenue,
+        expenses: totalExpenses,
+        netRevenue: netRevenue,
         salesCount: (sales || []).length,
         customersCount: (customers || []).length,
         logbookCount: (logbook || []).length,
+        expensesCount: (expenses || []).length,
         count: (sales || []).length + (customers || []).length + (logbook || []).length
       }
     })
@@ -1491,6 +1514,151 @@ app.delete('/api/logbook/:id', async (req, res) => {
     if (error) {
       console.error('Error deleting logbook entry:', error)
       return res.status(500).json({ error: 'Failed to delete logbook entry' })
+    }
+    
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// ========== EXPENSES ENDPOINTS ==========
+
+// Get all expenses
+app.get('/api/expenses', async (req, res) => {
+  try {
+    const { date } = req.query
+    
+    let query = supabase
+      .from('expenses')
+      .select(`
+        *,
+        staff:staff_id (
+          name,
+          username,
+          email
+        )
+      `)
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+    
+    if (date) {
+      // Filter by date
+      const [year, month, day] = date.split('-').map(Number)
+      const startDate = new Date(year, month - 1, day, 0, 0, 0, 0)
+      const endDate = new Date(year, month - 1, day, 23, 59, 59, 999)
+      const startISO = startDate.toISOString().split('T')[0]
+      const endISO = endDate.toISOString().split('T')[0]
+      
+      query = query.gte('date', startISO).lte('date', endISO)
+    }
+    
+    const { data, error } = await query
+    
+    if (error) {
+      console.error('Error fetching expenses:', error)
+      return res.status(500).json({ error: 'Failed to fetch expenses' })
+    }
+    
+    res.json(data || [])
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Create expense
+app.post('/api/expenses', async (req, res) => {
+  try {
+    const { date, name, amount, staff_id } = req.body
+    
+    if (!date || !name || amount === undefined) {
+      return res.status(400).json({ error: 'Date, name, and amount are required' })
+    }
+    
+    const { data, error } = await supabase
+      .from('expenses')
+      .insert({
+        date,
+        name,
+        amount: parseFloat(amount),
+        staff_id: staff_id || null
+      })
+      .select(`
+        *,
+        staff:staff_id (
+          name,
+          username,
+          email
+        )
+      `)
+      .single()
+    
+    if (error) {
+      console.error('Error creating expense:', error)
+      return res.status(500).json({ error: 'Failed to create expense' })
+    }
+    
+    res.json(data)
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Update expense
+app.put('/api/expenses/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { date, name, amount, staff_id } = req.body
+    
+    const updateData = {}
+    if (date !== undefined) updateData.date = date
+    if (name !== undefined) updateData.name = name
+    if (amount !== undefined) updateData.amount = parseFloat(amount)
+    if (staff_id !== undefined) updateData.staff_id = staff_id
+    updateData.updated_at = new Date().toISOString()
+    
+    const { data, error } = await supabase
+      .from('expenses')
+      .update(updateData)
+      .eq('id', id)
+      .select(`
+        *,
+        staff:staff_id (
+          name,
+          username,
+          email
+        )
+      `)
+      .single()
+    
+    if (error) {
+      console.error('Error updating expense:', error)
+      return res.status(500).json({ error: 'Failed to update expense' })
+    }
+    
+    res.json(data)
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Delete expense
+app.delete('/api/expenses/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    
+    const { error } = await supabase
+      .from('expenses')
+      .delete()
+      .eq('id', id)
+    
+    if (error) {
+      console.error('Error deleting expense:', error)
+      return res.status(500).json({ error: 'Failed to delete expense' })
     }
     
     res.json({ success: true })
