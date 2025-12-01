@@ -959,7 +959,6 @@ function Dashboard({ user }) {
                             <th>Type</th>
                             <th>Payment</th>
                             <th>Amount</th>
-                            <th>Note</th>
                             <th>Staff</th>
                           </tr>
                         </thead>
@@ -975,7 +974,6 @@ function Dashboard({ user }) {
                               <td>{entry.type}</td>
                               <td>{entry.payment_method || '-'}</td>
                               <td>{entry.amount ? `₱${parseFloat(entry.amount).toFixed(2)}` : '-'}</td>
-                              <td>{entry.note || '-'}</td>
                               <td>
                                 {entry.staff_id && entry.staff ? 
                                   (entry.staff.name || entry.staff.username || entry.staff.email || 'Staff') : 
@@ -986,7 +984,7 @@ function Dashboard({ user }) {
                         </tbody>
                         <tfoot>
                           <tr>
-                            <td colSpan="5" className="text-end fw-bold">Total:</td>
+                            <td colSpan="4" className="text-end fw-bold">Total:</td>
                             <td className="fw-bold">
                               ₱{todayLogbook.reduce((sum, entry) => sum + parseFloat(entry.amount || 0), 0).toFixed(2)}
                             </td>
