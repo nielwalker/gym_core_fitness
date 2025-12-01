@@ -1,6 +1,7 @@
 import { Container, Card, Table, Alert, Modal, Button, Form, InputGroup } from 'react-bootstrap'
 import { useState, useEffect } from 'react'
 import api from '../lib/axios'
+import { calculateExpirationDateLocal } from '../lib/dateUtils'
 
 function Users() {
   const [customers, setCustomers] = useState([])
@@ -168,6 +169,56 @@ function Users() {
       }, 1500)
     } catch (error) {
       setError(error.response?.data?.error || 'Failed to clear remaining balance')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleRenew = async () => {
+    if (!selectedCustomer) return
+
+    // Check if account is expired or inactive
+    const expired = isExpired(selectedCustomer.expiration_date)
+    
+    // If account is active and not expired, show message
+    if (!expired) {
+      setError('')
+      setSuccess('This account is Active')
+      setTimeout(() => {
+        setSuccess('')
+      }, 2000)
+      return
+    }
+
+    // If expired, proceed with renewal
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      // Calculate new expiration date (1 month from today)
+      const newExpirationDate = calculateExpirationDateLocal()
+      
+      // Update the customer with new expiration date
+      await api.put(`/customers/${selectedCustomer.id}`, {
+        expiration_date: newExpirationDate,
+        start_date: new Date().toISOString().split('T')[0] // Update start date to today
+      })
+      
+      setSuccess('Account renewed successfully! Expiration date updated.')
+      fetchCustomers()
+      
+      // Update the editData to reflect the new expiration date
+      setEditData({
+        ...editData,
+        expiration_date: newExpirationDate
+      })
+      
+      setTimeout(() => {
+        setSuccess('')
+      }, 2000)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to renew account')
     } finally {
       setLoading(false)
     }
@@ -441,6 +492,9 @@ function Users() {
           )}
           <Button variant="primary" onClick={handleUpdate} disabled={loading}>
             {loading ? 'Updating...' : 'Update'}
+          </Button>
+          <Button variant="info" onClick={handleRenew} disabled={loading}>
+            {loading ? 'Renewing...' : 'Re-new'}
           </Button>
           <Button variant="danger" onClick={handleDelete} disabled={loading}>
             {loading ? 'Deleting...' : 'Delete'}
