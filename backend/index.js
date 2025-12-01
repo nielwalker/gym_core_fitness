@@ -1363,6 +1363,39 @@ app.get('/api/sales/date', async (req, res) => {
       expensesError = null
     }
     
+    // Get notes for this date
+    let notes = []
+    let notesError = null
+    
+    try {
+      const { data: notesData, error: notesErr } = await supabase
+        .from('notes')
+        .select(`
+          *,
+          staff:staff_id (
+            name,
+            username,
+            email
+          )
+        `)
+        .eq('date', dateStr)
+        .order('created_at', { ascending: false })
+      
+      notes = notesData || []
+      notesError = notesErr
+      
+      // If table doesn't exist, just log and continue with empty notes
+      if (notesError && (notesError.code === '42P01' || notesError.message?.includes('does not exist'))) {
+        console.warn('Notes table not found. Please run migration_create_notes.sql. Continuing without notes data.')
+        notes = []
+        notesError = null
+      }
+    } catch (notesErr) {
+      console.warn('Error fetching notes (table may not exist):', notesErr.message)
+      notes = []
+      notesError = null
+    }
+    
     if (salesError || customersError || logbookError) {
       console.error('Error fetching date data:', { salesError, customersError, logbookError })
       return res.status(500).json({ error: 'Failed to fetch date data' })
@@ -1395,6 +1428,7 @@ app.get('/api/sales/date', async (req, res) => {
       customers: customers || [],
       logbook: logbook || [],
       expenses: expenses || [],
+      notes: notes || [],
       stats: {
         revenue: totalRevenue,
         expenses: totalExpenses,
@@ -1403,6 +1437,7 @@ app.get('/api/sales/date', async (req, res) => {
         customersCount: (customers || []).length,
         logbookCount: (logbook || []).length,
         expensesCount: (expenses || []).length,
+        notesCount: (notes || []).length,
         count: (sales || []).length + (customers || []).length + (logbook || []).length
       }
     })
@@ -1941,6 +1976,151 @@ app.delete('/api/expenses/:id', async (req, res) => {
     if (error) {
       console.error('Error deleting expense:', error)
       return res.status(500).json({ error: 'Failed to delete expense' })
+    }
+    
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// ========== NOTES ENDPOINTS ==========
+
+// Get all notes
+app.get('/api/notes', async (req, res) => {
+  try {
+    const { date } = req.query
+    
+    let query = supabase
+      .from('notes')
+      .select(`
+        *,
+        staff:staff_id (
+          name,
+          username,
+          email
+        )
+      `)
+      .order('date', { ascending: false })
+      .order('created_at', { ascending: false })
+    
+    if (date) {
+      query = query.eq('date', date)
+    }
+    
+    const { data, error } = await query
+    
+    if (error) {
+      console.error('Error fetching notes:', error)
+      if (error.code === '42P01' || error.message?.includes('does not exist')) {
+        return res.status(500).json({ 
+          error: 'Notes table not found. Please run the migration SQL file: backend/database/migration_create_notes.sql' 
+        })
+      }
+      return res.status(500).json({ error: 'Failed to fetch notes', details: error.message })
+    }
+    
+    res.json(data || [])
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error', details: error.message })
+  }
+})
+
+// Create note
+app.post('/api/notes', async (req, res) => {
+  try {
+    const { name, note, amount, date, staff_id } = req.body
+    
+    if (!name || !date) {
+      return res.status(400).json({ error: 'Name and date are required' })
+    }
+    
+    const insertData = {
+      name,
+      note: note || null,
+      amount: amount ? parseFloat(amount) : null,
+      date,
+      staff_id: staff_id || null
+    }
+    
+    const { data, error } = await supabase
+      .from('notes')
+      .insert(insertData)
+      .select(`
+        *,
+        staff:staff_id (
+          name,
+          username,
+          email
+        )
+      `)
+      .single()
+    
+    if (error) {
+      console.error('Error creating note:', error)
+      return res.status(500).json({ error: 'Failed to create note', details: error.message })
+    }
+    
+    res.json(data)
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Update note
+app.put('/api/notes/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { name, note, amount, date } = req.body
+    
+    const updateData = {}
+    if (name !== undefined) updateData.name = name
+    if (note !== undefined) updateData.note = note
+    if (amount !== undefined) updateData.amount = amount ? parseFloat(amount) : null
+    if (date !== undefined) updateData.date = date
+    
+    const { data, error } = await supabase
+      .from('notes')
+      .update(updateData)
+      .eq('id', id)
+      .select(`
+        *,
+        staff:staff_id (
+          name,
+          username,
+          email
+        )
+      `)
+      .single()
+    
+    if (error) {
+      console.error('Error updating note:', error)
+      return res.status(500).json({ error: 'Failed to update note', details: error.message })
+    }
+    
+    res.json(data)
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Delete note
+app.delete('/api/notes/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    
+    const { error } = await supabase
+      .from('notes')
+      .delete()
+      .eq('id', id)
+    
+    if (error) {
+      console.error('Error deleting note:', error)
+      return res.status(500).json({ error: 'Failed to delete note' })
     }
     
     res.json({ success: true })

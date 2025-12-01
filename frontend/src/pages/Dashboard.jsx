@@ -23,6 +23,7 @@ function Dashboard({ user }) {
   const [todayCustomers, setTodayCustomers] = useState([])
   const [todaySales, setTodaySales] = useState([])
   const [todayLogbook, setTodayLogbook] = useState([])
+  const [todayNotes, setTodayNotes] = useState([])
   const [showLogbookModal, setShowLogbookModal] = useState(false)
   const [showLogbookEditModal, setShowLogbookEditModal] = useState(false)
   const [selectedLogbookEntry, setSelectedLogbookEntry] = useState(null)
@@ -60,6 +61,21 @@ function Dashboard({ user }) {
     partial_amount: '',
     registration_type: 'Monthly'
   })
+  const [showNotesModal, setShowNotesModal] = useState(false)
+  const [showNotesEditModal, setShowNotesEditModal] = useState(false)
+  const [selectedNote, setSelectedNote] = useState(null)
+  const [notesData, setNotesData] = useState({
+    name: '',
+    note: '',
+    amount: '',
+    date: getTodayLocal()
+  })
+  const [editNotesData, setEditNotesData] = useState({
+    name: '',
+    note: '',
+    amount: '',
+    date: getTodayLocal()
+  })
 
   useEffect(() => {
     const fetchData = async () => {
@@ -75,6 +91,7 @@ function Dashboard({ user }) {
           setTodayCustomers(dateResponse.data.customers || [])
           setTodaySales(dateResponse.data.sales || [])
           setTodayLogbook(dateResponse.data.logbook || [])
+          setTodayNotes(dateResponse.data.notes || [])
         } catch (error) {
           console.error('Error fetching data:', error)
         }
@@ -95,6 +112,7 @@ function Dashboard({ user }) {
         setTodayCustomers(dateResponse.data.customers || [])
         setTodaySales(dateResponse.data.sales || [])
         setTodayLogbook(dateResponse.data.logbook || [])
+        setTodayNotes(dateResponse.data.notes || [])
       } catch (error) {
         console.error('Error fetching data:', error)
       }
@@ -123,6 +141,7 @@ function Dashboard({ user }) {
       setTodayCustomers(response.data.customers || [])
       setTodaySales(response.data.sales || [])
       setTodayLogbook(response.data.logbook || [])
+      setTodayNotes(response.data.notes || [])
     } catch (error) {
       console.error('Error fetching date data:', error)
     }
@@ -493,6 +512,124 @@ function Dashboard({ user }) {
     }
   }
 
+  const handleNotesChange = (e) => {
+    const { name, value } = e.target
+    setNotesData({ ...notesData, [name]: value })
+  }
+
+  const handleNotesSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      let staffId = null
+      if (user && isHardcodedAdmin(user)) {
+        staffId = null
+      } else {
+        const { data: { user: currentUser } } = await supabase.auth.getUser()
+        staffId = currentUser?.id || user?.id
+      }
+
+      await api.post('/notes', {
+        name: notesData.name.trim(),
+        note: notesData.note?.trim() || null,
+        amount: notesData.amount ? parseFloat(notesData.amount) : null,
+        date: notesData.date,
+        staff_id: staffId
+      })
+
+      setSuccess('Note added successfully!')
+      setNotesData({
+        name: '',
+        note: '',
+        amount: '',
+        date: selectedDate
+      })
+      fetchDateData(selectedDate)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to add note')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleNoteClick = (note) => {
+    setSelectedNote(note)
+    setEditNotesData({
+      name: note.name,
+      note: note.note || '',
+      amount: note.amount ? note.amount.toString() : '',
+      date: note.date
+    })
+    setShowNotesEditModal(true)
+    setError('')
+    setSuccess('')
+  }
+
+  const handleEditNotesChange = (e) => {
+    const { name, value } = e.target
+    setEditNotesData({ ...editNotesData, [name]: value })
+  }
+
+  const handleEditNotesSubmit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      await api.put(`/notes/${selectedNote.id}`, {
+        name: editNotesData.name.trim(),
+        note: editNotesData.note?.trim() || null,
+        amount: editNotesData.amount ? parseFloat(editNotesData.amount) : null,
+        date: editNotesData.date
+      })
+
+      setSuccess('Note updated successfully!')
+      fetchDateData(selectedDate)
+
+      setTimeout(() => {
+        setShowNotesEditModal(false)
+        setSelectedNote(null)
+        setSuccess('')
+      }, 1500)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to update note')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleDeleteNote = async () => {
+    if (!selectedNote) return
+    
+    if (!window.confirm('Are you sure you want to delete this note?')) {
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      await api.delete(`/notes/${selectedNote.id}`)
+      setSuccess('Note deleted successfully!')
+      fetchDateData(selectedDate)
+
+      setTimeout(() => {
+        setShowNotesEditModal(false)
+        setSelectedNote(null)
+        setSuccess('')
+      }, 1500)
+    } catch (error) {
+      setError(error.response?.data?.error || 'Failed to delete note')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleSalesSubmit = async (e) => {
     e.preventDefault()
     if (!selectedProduct) {
@@ -728,6 +865,70 @@ function Dashboard({ user }) {
                             <td></td>
                           </tr>
                         </tfoot>
+                      </Table>
+                    </>
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
+          <Row className="mb-4">
+            <Col md={12}>
+              <Card>
+                <Card.Header className="d-flex justify-content-between align-items-center">
+                  <h5 className="mb-0">
+                    {isTodayLocal(selectedDate) ? 'Notes' : `Notes - ${formatDateLocal(selectedDate)}`}
+                  </h5>
+                  {isHardcodedAdmin(user) && (
+                    <Button variant="primary" size="sm" onClick={() => {
+                      setNotesData({
+                        name: '',
+                        note: '',
+                        amount: '',
+                        date: selectedDate
+                      })
+                      setShowNotesModal(true)
+                    }}>
+                      + Add Note
+                    </Button>
+                  )}
+                </Card.Header>
+                <Card.Body>
+                  {todayNotes.length === 0 ? (
+                    <Alert variant="info" className="mb-0">
+                      {isTodayLocal(selectedDate) ? 'No notes today' : `No notes for ${formatDateLocal(selectedDate)}`}
+                    </Alert>
+                  ) : (
+                    <>
+                      <Table striped bordered hover size="sm">
+                        <thead>
+                          <tr>
+                            <th>Name</th>
+                            <th>Note</th>
+                            <th>Amount</th>
+                            <th>Date</th>
+                            <th>Staff</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {todayNotes.map((note) => (
+                            <tr 
+                              key={note.id}
+                              style={{ cursor: isHardcodedAdmin(user) ? 'pointer' : 'default' }}
+                              onClick={() => isHardcodedAdmin(user) && handleNoteClick(note)}
+                            >
+                              <td>{note.name}</td>
+                              <td>{note.note || '-'}</td>
+                              <td>{note.amount ? `₱${parseFloat(note.amount).toFixed(2)}` : '-'}</td>
+                              <td>{note.date}</td>
+                              <td>
+                                {note.staff_id && note.staff ? 
+                                  (note.staff.name || note.staff.username || note.staff.email || 'Staff') : 
+                                  'Admin'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
                       </Table>
                     </>
                   )}
@@ -1200,6 +1401,160 @@ function Dashboard({ user }) {
               </Button>
               <Button variant="danger" onClick={handleDeleteSale} disabled={loading}>
                 Delete
+              </Button>
+            </div>
+          </Form>
+        </Modal.Body>
+      </Modal>
+
+      {/* Notes Modal */}
+      <Modal show={showNotesModal} onHide={() => {
+        setShowNotesModal(false)
+        setNotesData({
+          name: '',
+          note: '',
+          amount: '',
+          date: selectedDate
+        })
+        setError('')
+        setSuccess('')
+      }}>
+        <Modal.Header closeButton>
+          <Modal.Title>Add Note</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {error && <Alert variant="danger" onClose={() => setError('')} dismissible>{error}</Alert>}
+          {success && <Alert variant="success" onClose={() => setSuccess('')} dismissible>{success}</Alert>}
+          
+          <Form onSubmit={handleNotesSubmit}>
+            <Form.Group className="mb-3">
+              <Form.Label>Name *</Form.Label>
+              <Form.Control
+                type="text"
+                name="name"
+                value={notesData.name}
+                onChange={handleNotesChange}
+                required
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Note</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={3}
+                name="note"
+                value={notesData.note}
+                onChange={handleNotesChange}
+                placeholder="Enter optional note"
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Amount</Form.Label>
+              <Form.Control
+                type="number"
+                step="0.01"
+                name="amount"
+                value={notesData.amount}
+                onChange={handleNotesChange}
+                min="0"
+                placeholder="Enter optional amount"
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Date *</Form.Label>
+              <Form.Control
+                type="date"
+                name="date"
+                value={notesData.date}
+                onChange={handleNotesChange}
+                required
+              />
+            </Form.Group>
+
+            <Button variant="primary" type="submit" disabled={loading} className="w-100">
+              {loading ? 'Adding...' : 'Add Note'}
+            </Button>
+          </Form>
+        </Modal.Body>
+      </Modal>
+
+      {/* Notes Edit Modal */}
+      <Modal show={showNotesEditModal} onHide={() => {
+        setShowNotesEditModal(false)
+        setSelectedNote(null)
+        setError('')
+        setSuccess('')
+      }}>
+        <Modal.Header closeButton>
+          <Modal.Title>Edit/Delete Note</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {error && <Alert variant="danger" onClose={() => setError('')} dismissible>{error}</Alert>}
+          {success && <Alert variant="success" onClose={() => setSuccess('')} dismissible>{success}</Alert>}
+          
+          <Form onSubmit={handleEditNotesSubmit}>
+            <Form.Group className="mb-3">
+              <Form.Label>Name *</Form.Label>
+              <Form.Control
+                type="text"
+                name="name"
+                value={editNotesData.name}
+                onChange={handleEditNotesChange}
+                required
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Note</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={3}
+                name="note"
+                value={editNotesData.note}
+                onChange={handleEditNotesChange}
+                placeholder="Enter optional note"
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Amount</Form.Label>
+              <Form.Control
+                type="number"
+                step="0.01"
+                name="amount"
+                value={editNotesData.amount}
+                onChange={handleEditNotesChange}
+                min="0"
+                placeholder="Enter optional amount"
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Date *</Form.Label>
+              <Form.Control
+                type="date"
+                name="date"
+                value={editNotesData.date}
+                onChange={handleEditNotesChange}
+                required
+              />
+            </Form.Group>
+
+            <div className="d-flex gap-2">
+              <Button variant="warning" type="submit" disabled={loading} className="flex-fill">
+                {loading ? 'Updating...' : 'Update'}
+              </Button>
+              <Button 
+                variant="danger" 
+                type="button" 
+                onClick={handleDeleteNote}
+                disabled={loading}
+                className="flex-fill"
+              >
+                {loading ? 'Deleting...' : 'Delete'}
               </Button>
             </div>
           </Form>
