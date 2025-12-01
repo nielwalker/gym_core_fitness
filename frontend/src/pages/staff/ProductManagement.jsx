@@ -8,7 +8,8 @@ function ProductManagement() {
     name: '',
     price: '',
     stock_quantity: '',
-    description: ''
+    description: '',
+    password: ''
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -35,6 +36,13 @@ function ProductManagement() {
     setError('')
     setSuccess('')
 
+    // Validate password
+    if (formData.password !== 'productpass') {
+      setError('Invalid password. Please enter the correct password to confirm changes.')
+      setLoading(false)
+      return
+    }
+
     try {
       const productData = {
         name: formData.name.trim(),
@@ -59,7 +67,8 @@ function ProductManagement() {
         name: '',
         price: '',
         stock_quantity: '',
-        description: ''
+        description: '',
+        password: ''
       })
       setEditingProduct(null)
       fetchProducts()
@@ -77,13 +86,21 @@ function ProductManagement() {
       name: product.name,
       price: product.price,
       stock_quantity: product.stock_quantity || 0,
-      description: product.description || ''
+      description: product.description || '',
+      password: ''
     })
     setShowModal(true)
   }
 
   const handleDelete = async (id) => {
     if (!window.confirm('Are you sure you want to delete this product?')) return
+
+    // Prompt for password
+    const password = window.prompt('Please enter the password to confirm deletion:')
+    if (password !== 'productpass') {
+      setError('Invalid password. Deletion cancelled.')
+      return
+    }
 
     try {
       await api.delete(`/products/${id}`)
@@ -105,7 +122,8 @@ function ProductManagement() {
       name: '',
       price: '',
       stock_quantity: '',
-      description: ''
+      description: '',
+      password: ''
     })
   }
 
@@ -202,6 +220,17 @@ function ProductManagement() {
                 value={formData.description}
                 onChange={handleChange}
                 placeholder="Enter product description (optional)"
+              />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Password *</Form.Label>
+              <Form.Control
+                type="password"
+                name="password"
+                value={formData.password}
+                onChange={handleChange}
+                placeholder="Enter password to confirm"
+                required
               />
             </Form.Group>
             <Button variant="primary" type="submit" disabled={loading} className="w-100">
