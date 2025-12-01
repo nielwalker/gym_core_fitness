@@ -15,6 +15,7 @@ function Dashboard({ user }) {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [quantity, setQuantity] = useState(1)
+  const [paymentMethod, setPaymentMethod] = useState('Cash')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -521,12 +522,13 @@ function Dashboard({ user }) {
         quantity: quantity,
         total_amount: totalAmount,
         staff_id: staffId,
-        payment_method: 'Cash' // Default, can be updated later if needed
+        payment_method: paymentMethod || 'Cash'
       })
       
       setSuccess('Sale processed successfully!')
       setSelectedProduct(null)
       setQuantity(1)
+      setPaymentMethod('Cash')
       setSearchTerm('')
       fetchProducts()
       
@@ -1019,6 +1021,7 @@ function Dashboard({ user }) {
         setShowSalesModal(false)
         setSelectedProduct(null)
         setQuantity(1)
+        setPaymentMethod('Cash')
         setSearchTerm('')
         setError('')
         setSuccess('')
@@ -1096,15 +1099,13 @@ function Dashboard({ user }) {
                 <Form.Group className="mb-3">
                   <Form.Label>Payment Method *</Form.Label>
                   <Form.Select
-                    value="Cash"
-                    disabled
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    required
                   >
                     <option value="Cash">Cash</option>
                     <option value="Gcash">Gcash</option>
                   </Form.Select>
-                  <Form.Text className="text-muted">
-                    Payment method can be edited after sale is created
-                  </Form.Text>
                 </Form.Group>
                 <Alert variant="info">
                   <strong>Selected Product:</strong> {selectedProduct.name} - ₱{parseFloat(selectedProduct.price).toFixed(2)}

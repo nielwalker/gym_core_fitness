@@ -217,21 +217,46 @@ function SalesTracking() {
                 ))}
               </tbody>
               <tfoot>
-                <tr>
-                  <td colSpan="4" className="text-end fw-bold">Total Revenue:</td>
-                  <td className="fw-bold">₱{dayStats.revenue?.toFixed(2) || '0.00'}</td>
-                  <td></td>
-                </tr>
-                <tr>
-                  <td colSpan="4" className="text-end fw-bold text-danger">Total Expenses:</td>
-                  <td className="fw-bold text-danger">-₱{dayStats.expenses?.toFixed(2) || '0.00'}</td>
-                  <td></td>
-                </tr>
-                <tr className="table-success">
-                  <td colSpan="4" className="text-end fw-bold">Net Revenue:</td>
-                  <td className="fw-bold">₱{dayStats.netRevenue?.toFixed(2) || '0.00'}</td>
-                  <td></td>
-                </tr>
+                {(() => {
+                  // Calculate Cash and Gcash revenue from sales
+                  const cashRevenue = daySales
+                    .filter(sale => sale.payment_method === 'Cash')
+                    .reduce((sum, sale) => sum + parseFloat(sale.total_amount || 0), 0)
+                  
+                  const gcashRevenue = daySales
+                    .filter(sale => sale.payment_method === 'Gcash')
+                    .reduce((sum, sale) => sum + parseFloat(sale.total_amount || 0), 0)
+                  
+                  return (
+                    <>
+                      <tr>
+                        <td colSpan="4" className="text-end fw-bold">Cash Revenue:</td>
+                        <td className="fw-bold">₱{cashRevenue.toFixed(2)}</td>
+                        <td></td>
+                      </tr>
+                      <tr>
+                        <td colSpan="4" className="text-end fw-bold">Gcash Revenue:</td>
+                        <td className="fw-bold">₱{gcashRevenue.toFixed(2)}</td>
+                        <td></td>
+                      </tr>
+                      <tr>
+                        <td colSpan="4" className="text-end fw-bold">Total Revenue:</td>
+                        <td className="fw-bold">₱{dayStats.revenue?.toFixed(2) || '0.00'}</td>
+                        <td></td>
+                      </tr>
+                      <tr>
+                        <td colSpan="4" className="text-end fw-bold text-danger">Total Expenses:</td>
+                        <td className="fw-bold text-danger">-₱{dayStats.expenses?.toFixed(2) || '0.00'}</td>
+                        <td></td>
+                      </tr>
+                      <tr className="table-success">
+                        <td colSpan="4" className="text-end fw-bold">Net Revenue:</td>
+                        <td className="fw-bold">₱{dayStats.netRevenue?.toFixed(2) || '0.00'}</td>
+                        <td></td>
+                      </tr>
+                    </>
+                  )
+                })()}
               </tfoot>
             </Table>
           )}
