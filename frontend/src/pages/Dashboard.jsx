@@ -35,6 +35,11 @@ function Dashboard({ user }) {
     payment_method: 'Cash',
     note: ''
   })
+  const [recordType, setRecordType] = useState('New')
+  const [logbookSearchTerm, setLogbookSearchTerm] = useState('')
+  const [logbookSearchResults, setLogbookSearchResults] = useState([])
+  const [selectedOldRecord, setSelectedOldRecord] = useState(null)
+  const [searchingLogbook, setSearchingLogbook] = useState(false)
   const [editLogbookData, setEditLogbookData] = useState({
     name: '',
     address: '',
@@ -168,6 +173,54 @@ function Dashboard({ user }) {
   const handleLogbookChange = (e) => {
     const { name, value } = e.target
     setLogbookData({ ...logbookData, [name]: value })
+  }
+
+  const handleRecordTypeChange = (e) => {
+    const newType = e.target.value
+    setRecordType(newType)
+    setLogbookSearchTerm('')
+    setLogbookSearchResults([])
+    setSelectedOldRecord(null)
+    if (newType === 'New') {
+      setLogbookData({
+        name: '',
+        address: '',
+        type: 'walk-in',
+        amount: '',
+        payment_method: 'Cash',
+        note: ''
+      })
+    }
+  }
+
+  const handleLogbookSearch = async (searchTerm) => {
+    if (!searchTerm || searchTerm.trim() === '') {
+      setLogbookSearchResults([])
+      return
+    }
+
+    setSearchingLogbook(true)
+    try {
+      const response = await api.get(`/logbook/all?search=${encodeURIComponent(searchTerm)}`)
+      setLogbookSearchResults(response.data || [])
+    } catch (error) {
+      console.error('Error searching logbook:', error)
+      setError('Failed to search logbook records')
+    } finally {
+      setSearchingLogbook(false)
+    }
+  }
+
+  const handleOldRecordSelect = (record) => {
+    setSelectedOldRecord(record)
+    setLogbookData({
+      name: record.name || '',
+      address: record.address || '',
+      type: record.type || 'walk-in',
+      amount: record.amount ? record.amount.toString() : '',
+      payment_method: record.payment_method || 'Cash',
+      note: record.note || ''
+    })
   }
 
   const handleLogbookSubmit = async (e) => {
@@ -1124,9 +1177,13 @@ function Dashboard({ user }) {
           payment_method: 'Cash',
           note: ''
         })
+        setRecordType('New')
+        setLogbookSearchTerm('')
+        setLogbookSearchResults([])
+        setSelectedOldRecord(null)
         setError('')
         setSuccess('')
-      }}>
+      }} size="lg">
         <Modal.Header closeButton>
           <Modal.Title>Add Log Book Entry</Modal.Title>
         </Modal.Header>
@@ -1136,81 +1193,175 @@ function Dashboard({ user }) {
           
           <Form onSubmit={handleLogbookSubmit}>
             <Form.Group className="mb-3">
-              <Form.Label>Name *</Form.Label>
-              <Form.Control
-                type="text"
-                name="name"
-                value={logbookData.name}
-                onChange={handleLogbookChange}
-                required
-              />
-            </Form.Group>
-
-            <Form.Group className="mb-3">
-              <Form.Label>Address *</Form.Label>
-              <Form.Control
-                type="text"
-                name="address"
-                value={logbookData.address}
-                onChange={handleLogbookChange}
-                required
-              />
-            </Form.Group>
-
-            <Form.Group className="mb-3">
-              <Form.Label>Type *</Form.Label>
+              <Form.Label>Record *</Form.Label>
               <Form.Select
-                name="type"
-                value={logbookData.type}
-                onChange={handleLogbookChange}
+                value={recordType}
+                onChange={handleRecordTypeChange}
                 required
               >
-                <option value="student">Student</option>
-                <option value="regular">Regular</option>
-                <option value="walk-in">Walk-in</option>
+                <option value="New">New</option>
+                <option value="Old">Old</option>
               </Form.Select>
             </Form.Group>
 
-            <Form.Group className="mb-3">
-              <Form.Label>Payment Method *</Form.Label>
-              <Form.Select
-                name="payment_method"
-                value={logbookData.payment_method}
-                onChange={handleLogbookChange}
-                required
-              >
-                <option value="Cash">Cash</option>
-                <option value="Gcash">Gcash</option>
-              </Form.Select>
-            </Form.Group>
-            <Form.Group className="mb-3">
-              <Form.Label>Amount *</Form.Label>
-              <Form.Control
-                type="number"
-                step="0.01"
-                name="amount"
-                value={logbookData.amount}
-                onChange={handleLogbookChange}
-                required
-                min="0"
-              />
-            </Form.Group>
+            {recordType === 'Old' && (
+              <>
+                <Form.Group className="mb-3">
+                  <Form.Label>Search Log Book Records</Form.Label>
+                  <InputGroup>
+                    <Form.Control
+                      type="text"
+                      placeholder="Search by name..."
+                      value={logbookSearchTerm}
+                      onChange={(e) => {
+                        const term = e.target.value
+                        setLogbookSearchTerm(term)
+                        handleLogbookSearch(term)
+                      }}
+                    />
+                    {logbookSearchTerm && (
+                      <Button 
+                        variant="outline-secondary" 
+                        onClick={() => {
+                          setLogbookSearchTerm('')
+                          setLogbookSearchResults([])
+                          setSelectedOldRecord(null)
+                        }}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </InputGroup>
+                </Form.Group>
 
-            <Form.Group className="mb-3">
-              <Form.Label>Note</Form.Label>
-              <Form.Control
-                as="textarea"
-                rows={3}
-                name="note"
-                value={logbookData.note}
-                onChange={handleLogbookChange}
-                placeholder="Enter optional note"
-              />
-            </Form.Group>
+                {logbookSearchResults.length > 0 && !selectedOldRecord && (
+                  <div className="mb-3" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                    <Table striped bordered hover size="sm">
+                      <thead>
+                        <tr>
+                          <th>Name</th>
+                          <th>Address</th>
+                          <th>Type</th>
+                          <th>Payment</th>
+                          <th>Amount</th>
+                          <th>Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {logbookSearchResults.map((record) => (
+                          <tr 
+                            key={record.id}
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => handleOldRecordSelect(record)}
+                          >
+                            <td>{record.name}</td>
+                            <td>{record.address}</td>
+                            <td>{record.type}</td>
+                            <td>{record.payment_method || '-'}</td>
+                            <td>{record.amount ? `₱${parseFloat(record.amount).toFixed(2)}` : '-'}</td>
+                            <td>{new Date(record.created_at).toLocaleDateString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </Table>
+                  </div>
+                )}
 
-            <Button variant="info" type="submit" disabled={loading} className="w-100">
-              {loading ? 'Adding...' : 'Add Entry'}
-            </Button>
+                {selectedOldRecord && (
+                  <Alert variant="info" className="mb-3">
+                    Selected: <strong>{selectedOldRecord.name}</strong> - Click below to edit details before logging in.
+                  </Alert>
+                )}
+              </>
+            )}
+
+            {(recordType === 'New' || selectedOldRecord) && (
+              <>
+                <Form.Group className="mb-3">
+                  <Form.Label>Name *</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="name"
+                    value={logbookData.name}
+                    onChange={handleLogbookChange}
+                    required
+                  />
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Address *</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="address"
+                    value={logbookData.address}
+                    onChange={handleLogbookChange}
+                    required
+                  />
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Type *</Form.Label>
+                  <Form.Select
+                    name="type"
+                    value={logbookData.type}
+                    onChange={handleLogbookChange}
+                    required
+                  >
+                    <option value="student">Student</option>
+                    <option value="regular">Regular</option>
+                    <option value="walk-in">Walk-in</option>
+                  </Form.Select>
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Payment Method *</Form.Label>
+                  <Form.Select
+                    name="payment_method"
+                    value={logbookData.payment_method}
+                    onChange={handleLogbookChange}
+                    required
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="Gcash">Gcash</option>
+                  </Form.Select>
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Amount *</Form.Label>
+                  <Form.Control
+                    type="number"
+                    step="0.01"
+                    name="amount"
+                    value={logbookData.amount}
+                    onChange={handleLogbookChange}
+                    required
+                    min="0"
+                  />
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label>Note</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={3}
+                    name="note"
+                    value={logbookData.note}
+                    onChange={handleLogbookChange}
+                    placeholder="Enter optional note"
+                  />
+                </Form.Group>
+
+                <Button variant="info" type="submit" disabled={loading} className="w-100">
+                  {loading ? 'Logging in...' : 'Log in'}
+                </Button>
+              </>
+            )}
+
+            {recordType === 'Old' && !selectedOldRecord && logbookSearchTerm && logbookSearchResults.length === 0 && !searchingLogbook && (
+              <Alert variant="info">
+                No records found. Try a different search term or select "New" to create a new entry.
+              </Alert>
+            )}
           </Form>
         </Modal.Body>
       </Modal>

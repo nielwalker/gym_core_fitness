@@ -1538,6 +1538,42 @@ app.get('/api/stats/sales', async (req, res) => {
   }
 })
 
+// Get all logbook entries (for search)
+app.get('/api/logbook/all', async (req, res) => {
+  try {
+    const { search } = req.query
+    
+    let query = supabase
+      .from('logbook')
+      .select(`
+        *,
+        staff:staff_id (
+          name,
+          username,
+          email
+        )
+      `)
+      .order('created_at', { ascending: false })
+    
+    // If search term provided, filter by name
+    if (search) {
+      query = query.ilike('name', `%${search}%`)
+    }
+    
+    const { data, error } = await query
+    
+    if (error) {
+      console.error('Error fetching logbook entries:', error)
+      return res.status(500).json({ error: 'Failed to fetch logbook entries' })
+    }
+    
+    res.json(data || [])
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
 // Create logbook entry
 app.post('/api/logbook', async (req, res) => {
   try {
