@@ -30,20 +30,23 @@ function Dashboard({ user }) {
     address: '',
     type: 'walk-in',
     amount: '',
-    payment_method: 'Cash'
+    payment_method: 'Cash',
+    note: ''
   })
   const [editLogbookData, setEditLogbookData] = useState({
     name: '',
     address: '',
     type: 'walk-in',
     amount: '',
-    payment_method: 'Cash'
+    payment_method: 'Cash',
+    note: ''
   })
   const [showSaleEditModal, setShowSaleEditModal] = useState(false)
   const [selectedSale, setSelectedSale] = useState(null)
   const [editSaleData, setEditSaleData] = useState({
     product_id: '',
-    quantity: 1
+    quantity: 1,
+    payment_method: 'Cash'
   })
   const [showCustomerEditModal, setShowCustomerEditModal] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState(null)
@@ -176,7 +179,8 @@ function Dashboard({ user }) {
         type: logbookData.type,
         amount: logbookData.amount ? parseFloat(logbookData.amount) : null,
         payment_method: logbookData.payment_method || null,
-        staff_id: staffId
+        staff_id: staffId,
+        note: logbookData.note || null
       })
 
       setSuccess('Logbook entry added successfully!')
@@ -185,7 +189,8 @@ function Dashboard({ user }) {
         address: '',
         type: 'walk-in',
         amount: '',
-        payment_method: 'Cash'
+        payment_method: 'Cash',
+        note: ''
       })
 
       // Refresh stats and logbook
@@ -193,10 +198,7 @@ function Dashboard({ user }) {
       setStats(statsResponse.data)
       fetchDateData(selectedDate)
 
-      setTimeout(() => {
-        setShowLogbookModal(false)
-        setSuccess('')
-      }, 1500)
+      // Don't auto-close - let user close manually with close icon
     } catch (error) {
       setError(error.response?.data?.error || 'Failed to add logbook entry')
     } finally {
@@ -211,7 +213,8 @@ function Dashboard({ user }) {
       address: entry.address,
       type: entry.type,
       amount: entry.amount ? entry.amount.toString() : '',
-      payment_method: entry.payment_method || 'Cash'
+      payment_method: entry.payment_method || 'Cash',
+      note: entry.note || ''
     })
     setShowLogbookEditModal(true)
     setError('')
@@ -242,7 +245,8 @@ function Dashboard({ user }) {
         address: editLogbookData.address,
         type: editLogbookData.type,
         amount: editLogbookData.amount ? parseFloat(editLogbookData.amount) : null,
-        payment_method: editLogbookData.payment_method || null
+        payment_method: editLogbookData.payment_method || null,
+        note: editLogbookData.note || null
       })
 
       setSuccess('Logbook entry updated successfully!')
@@ -300,7 +304,8 @@ function Dashboard({ user }) {
     setSelectedSale(sale)
     setEditSaleData({
       product_id: sale.product_id,
-      quantity: sale.quantity
+      quantity: sale.quantity,
+      payment_method: sale.payment_method || 'Cash'
     })
     setShowSaleEditModal(true)
     setError('')
@@ -331,7 +336,8 @@ function Dashboard({ user }) {
       await api.put(`/sales/${selectedSale.id}`, {
         product_id: editSaleData.product_id,
         quantity: parseInt(editSaleData.quantity),
-        total_amount: totalAmount
+        total_amount: totalAmount,
+        payment_method: editSaleData.payment_method || null
       })
 
       setSuccess('Sale updated successfully!')
@@ -514,7 +520,8 @@ function Dashboard({ user }) {
         product_id: selectedProduct.id,
         quantity: quantity,
         total_amount: totalAmount,
-        staff_id: staffId
+        staff_id: staffId,
+        payment_method: 'Cash' // Default, can be updated later if needed
       })
       
       setSuccess('Sale processed successfully!')
@@ -528,10 +535,7 @@ function Dashboard({ user }) {
       setStats(statsResponse.data)
       fetchDateData(selectedDate)
       
-      setTimeout(() => {
-        setShowSalesModal(false)
-        setSuccess('')
-      }, 1500)
+      // Don't auto-close - let user close manually with close icon
     } catch (error) {
       setError(error.response?.data?.error || 'Failed to process sale')
     } finally {
@@ -689,6 +693,7 @@ function Dashboard({ user }) {
                           <tr>
                             <th>Product</th>
                             <th>Qty</th>
+                            <th>Payment Method</th>
                             <th>Amount</th>
                             <th>Staff</th>
                           </tr>
@@ -702,6 +707,7 @@ function Dashboard({ user }) {
                             >
                               <td>{sale.product?.name || 'N/A'}</td>
                               <td>{sale.quantity}</td>
+                              <td>{sale.payment_method || 'Cash'}</td>
                               <td>₱{parseFloat(sale.total_amount || 0).toFixed(2)}</td>
                               <td>
                                 {sale.staff_id && sale.staff ? 
@@ -713,7 +719,7 @@ function Dashboard({ user }) {
                         </tbody>
                         <tfoot>
                           <tr>
-                            <td colSpan="2" className="text-end fw-bold">Total:</td>
+                            <td colSpan="3" className="text-end fw-bold">Total:</td>
                             <td className="fw-bold">
                               ₱{todaySales.reduce((sum, sale) => sum + parseFloat(sale.total_amount || 0), 0).toFixed(2)}
                             </td>
@@ -750,6 +756,7 @@ function Dashboard({ user }) {
                             <th>Type</th>
                             <th>Payment</th>
                             <th>Amount</th>
+                            <th>Note</th>
                             <th>Staff</th>
                           </tr>
                         </thead>
@@ -765,6 +772,7 @@ function Dashboard({ user }) {
                               <td>{entry.type}</td>
                               <td>{entry.payment_method || '-'}</td>
                               <td>{entry.amount ? `₱${parseFloat(entry.amount).toFixed(2)}` : '-'}</td>
+                              <td>{entry.note || '-'}</td>
                               <td>
                                 {entry.staff_id && entry.staff ? 
                                   (entry.staff.name || entry.staff.username || entry.staff.email || 'Staff') : 
@@ -775,7 +783,7 @@ function Dashboard({ user }) {
                         </tbody>
                         <tfoot>
                           <tr>
-                            <td colSpan="4" className="text-end fw-bold">Total:</td>
+                            <td colSpan="5" className="text-end fw-bold">Total:</td>
                             <td className="fw-bold">
                               ₱{todayLogbook.reduce((sum, entry) => sum + parseFloat(entry.amount || 0), 0).toFixed(2)}
                             </td>
@@ -799,7 +807,8 @@ function Dashboard({ user }) {
           address: '',
           type: 'walk-in',
           amount: '',
-          payment_method: 'Cash'
+          payment_method: 'Cash',
+          note: ''
         })
         setError('')
         setSuccess('')
@@ -873,6 +882,18 @@ function Dashboard({ user }) {
               />
             </Form.Group>
 
+            <Form.Group className="mb-3">
+              <Form.Label>Note</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={3}
+                name="note"
+                value={editLogbookData.note}
+                onChange={handleEditLogbookChange}
+                placeholder="Enter optional note"
+              />
+            </Form.Group>
+
             <div className="d-flex gap-2">
               <Button variant="warning" type="submit" disabled={loading} className="flex-fill">
                 {loading ? 'Updating...' : 'Update'}
@@ -899,7 +920,8 @@ function Dashboard({ user }) {
           address: '',
           type: 'walk-in',
           amount: '',
-          payment_method: 'Cash'
+          payment_method: 'Cash',
+          note: ''
         })
         setError('')
         setSuccess('')
@@ -970,6 +992,18 @@ function Dashboard({ user }) {
                 onChange={handleLogbookChange}
                 required
                 min="0"
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Note</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={3}
+                name="note"
+                value={logbookData.note}
+                onChange={handleLogbookChange}
+                placeholder="Enter optional note"
               />
             </Form.Group>
 
@@ -1059,6 +1093,19 @@ function Dashboard({ user }) {
                     required
                   />
                 </Form.Group>
+                <Form.Group className="mb-3">
+                  <Form.Label>Payment Method *</Form.Label>
+                  <Form.Select
+                    value="Cash"
+                    disabled
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="Gcash">Gcash</option>
+                  </Form.Select>
+                  <Form.Text className="text-muted">
+                    Payment method can be edited after sale is created
+                  </Form.Text>
+                </Form.Group>
                 <Alert variant="info">
                   <strong>Selected Product:</strong> {selectedProduct.name} - ₱{parseFloat(selectedProduct.price).toFixed(2)}
                   <br />
@@ -1119,6 +1166,19 @@ function Dashboard({ user }) {
                 onChange={handleEditSaleChange}
                 required
               />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Payment Method *</Form.Label>
+              <Form.Select
+                name="payment_method"
+                value={editSaleData.payment_method}
+                onChange={handleEditSaleChange}
+                required
+              >
+                <option value="Cash">Cash</option>
+                <option value="Gcash">Gcash</option>
+              </Form.Select>
             </Form.Group>
 
             {editSaleData.product_id && (

@@ -126,6 +126,7 @@ function SalesTracking() {
                   <th>Date</th>
                   <th>Type</th>
                   <th>Details</th>
+                  <th>Payment Method</th>
                   <th>Amount</th>
                   <th>Staff</th>
                 </tr>
@@ -141,6 +142,7 @@ function SalesTracking() {
                       <br />
                       <small className="text-muted">Unit Price: ₱{sale.product?.price ? parseFloat(sale.product.price).toFixed(2) : '0.00'}</small>
                     </td>
+                    <td>{sale.payment_method || 'Cash'}</td>
                     <td>₱{parseFloat(sale.total_amount).toFixed(2)}</td>
                     <td>
                       {sale.staff_id && sale.staff ? 
@@ -216,17 +218,17 @@ function SalesTracking() {
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan="3" className="text-end fw-bold">Total Revenue:</td>
+                  <td colSpan="4" className="text-end fw-bold">Total Revenue:</td>
                   <td className="fw-bold">₱{dayStats.revenue?.toFixed(2) || '0.00'}</td>
                   <td></td>
                 </tr>
                 <tr>
-                  <td colSpan="3" className="text-end fw-bold text-danger">Total Expenses:</td>
+                  <td colSpan="4" className="text-end fw-bold text-danger">Total Expenses:</td>
                   <td className="fw-bold text-danger">-₱{dayStats.expenses?.toFixed(2) || '0.00'}</td>
                   <td></td>
                 </tr>
                 <tr className="table-success">
-                  <td colSpan="3" className="text-end fw-bold">Net Revenue:</td>
+                  <td colSpan="4" className="text-end fw-bold">Net Revenue:</td>
                   <td className="fw-bold">₱{dayStats.netRevenue?.toFixed(2) || '0.00'}</td>
                   <td></td>
                 </tr>

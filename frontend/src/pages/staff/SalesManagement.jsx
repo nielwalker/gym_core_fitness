@@ -14,7 +14,8 @@ function SalesManagement() {
   const [formData, setFormData] = useState({
     customer_id: '',
     product_id: '',
-    quantity: 1
+    quantity: 1,
+    payment_method: 'Cash'
   })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -99,13 +100,15 @@ function SalesManagement() {
       await api.post('/sales', {
         ...formData,
         total_amount: totalAmount,
-        staff_id: user.id
+        staff_id: user.id,
+        payment_method: formData.payment_method || 'Cash'
       })
       setSuccess('Sale processed successfully!')
       setFormData({
         customer_id: '',
         product_id: '',
-        quantity: 1
+        quantity: 1,
+        payment_method: 'Cash'
       })
       setSelectedProduct(null)
       fetchSales()
@@ -177,6 +180,7 @@ function SalesManagement() {
                   <th>Customer</th>
                   <th>Product</th>
                   <th>Quantity</th>
+                  <th>Payment Method</th>
                   <th>Total Amount</th>
                 </tr>
               </thead>
@@ -187,6 +191,7 @@ function SalesManagement() {
                     <td>{sale.customers?.name || 'N/A'}</td>
                     <td>{sale.products?.name || 'N/A'}</td>
                     <td>{sale.quantity}</td>
+                    <td>{sale.payment_method || 'Cash'}</td>
                     <td>₱{parseFloat(sale.total_amount).toFixed(2)}</td>
                   </tr>
                 ))}
@@ -250,6 +255,18 @@ function SalesManagement() {
                 onChange={handleChange}
                 required
               />
+            </Form.Group>
+            <Form.Group className="mb-3">
+              <Form.Label>Payment Method *</Form.Label>
+              <Form.Select
+                name="payment_method"
+                value={formData.payment_method}
+                onChange={handleChange}
+                required
+              >
+                <option value="Cash">Cash</option>
+                <option value="Gcash">Gcash</option>
+              </Form.Select>
             </Form.Group>
             {selectedProduct && (
               <Alert variant="success">

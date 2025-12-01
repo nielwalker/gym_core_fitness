@@ -1083,7 +1083,7 @@ app.get('/api/sales', async (req, res) => {
 // Create sale
 app.post('/api/sales', async (req, res) => {
   try {
-    const { product_id, quantity, total_amount, staff_id } = req.body
+    const { product_id, quantity, total_amount, staff_id, payment_method } = req.body
     
     if (!product_id || !quantity || total_amount === undefined) {
       return res.status(400).json({ error: 'Product ID, quantity, and total amount are required' })
@@ -1114,7 +1114,8 @@ app.post('/api/sales', async (req, res) => {
         product_id,
         quantity,
         total_amount: parseFloat(total_amount),
-        staff_id: staff_id || null
+        staff_id: staff_id || null,
+        payment_method: payment_method || null
       })
       .select()
       .single()
@@ -1135,7 +1136,7 @@ app.post('/api/sales', async (req, res) => {
 app.put('/api/sales/:id', async (req, res) => {
   try {
     const { id } = req.params
-    const { product_id, quantity, total_amount } = req.body
+    const { product_id, quantity, total_amount, payment_method } = req.body
     
     if (!product_id || !quantity || total_amount === undefined) {
       return res.status(400).json({ error: 'Product ID, quantity, and total amount are required' })
@@ -1187,13 +1188,18 @@ app.put('/api/sales/:id', async (req, res) => {
       .eq('id', product_id)
     
     // Update sale
+    const updateData = {
+      product_id,
+      quantity,
+      total_amount: parseFloat(total_amount)
+    }
+    if (payment_method !== undefined) {
+      updateData.payment_method = payment_method || null
+    }
+    
     const { data, error } = await supabase
       .from('sales')
-      .update({
-        product_id,
-        quantity,
-        total_amount: parseFloat(total_amount)
-      })
+      .update(updateData)
       .eq('id', id)
       .select()
       .single()
@@ -1500,7 +1506,7 @@ app.get('/api/stats/sales', async (req, res) => {
 // Create logbook entry
 app.post('/api/logbook', async (req, res) => {
   try {
-    const { name, address, type, amount, payment_method, staff_id } = req.body
+    const { name, address, type, amount, payment_method, staff_id, note } = req.body
     
     if (!name || !type) {
       return res.status(400).json({ error: 'Name and type are required' })
@@ -1514,7 +1520,8 @@ app.post('/api/logbook', async (req, res) => {
         type,
         amount: amount ? parseFloat(amount) : null,
         payment_method: payment_method || null,
-        staff_id: staff_id || null
+        staff_id: staff_id || null,
+        note: note || null
       })
       .select()
       .single()
