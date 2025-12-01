@@ -218,25 +218,62 @@ function SalesTracking() {
               </tbody>
               <tfoot>
                 {(() => {
-                  // Calculate Cash and Gcash revenue from sales
-                  const cashRevenue = daySales
+                  // Calculate Cash revenue from all sources
+                  // 1. Product Sales
+                  const cashFromSales = daySales
                     .filter(sale => sale.payment_method === 'Cash')
                     .reduce((sum, sale) => sum + parseFloat(sale.total_amount || 0), 0)
                   
-                  const gcashRevenue = daySales
+                  // 2. Log Book entries
+                  const cashFromLogbook = dayLogbook
+                    .filter(entry => entry.payment_method === 'Cash' && entry.amount)
+                    .reduce((sum, entry) => sum + parseFloat(entry.amount || 0), 0)
+                  
+                  // 3. Customer Registrations
+                  const cashFromRegistrations = dayCustomers
+                    .filter(customer => customer.payment_method === 'Cash')
+                    .reduce((sum, customer) => {
+                      const amount = customer.payment_method === 'Partial' 
+                        ? parseFloat(customer.partial_amount || 0)
+                        : parseFloat(customer.amount || 0)
+                      return sum + amount
+                    }, 0)
+                  
+                  const totalCashRevenue = cashFromSales + cashFromLogbook + cashFromRegistrations
+                  
+                  // Calculate Gcash revenue from all sources
+                  // 1. Product Sales
+                  const gcashFromSales = daySales
                     .filter(sale => sale.payment_method === 'Gcash')
                     .reduce((sum, sale) => sum + parseFloat(sale.total_amount || 0), 0)
+                  
+                  // 2. Log Book entries
+                  const gcashFromLogbook = dayLogbook
+                    .filter(entry => entry.payment_method === 'Gcash' && entry.amount)
+                    .reduce((sum, entry) => sum + parseFloat(entry.amount || 0), 0)
+                  
+                  // 3. Customer Registrations
+                  const gcashFromRegistrations = dayCustomers
+                    .filter(customer => customer.payment_method === 'Gcash')
+                    .reduce((sum, customer) => {
+                      const amount = customer.payment_method === 'Partial' 
+                        ? parseFloat(customer.partial_amount || 0)
+                        : parseFloat(customer.amount || 0)
+                      return sum + amount
+                    }, 0)
+                  
+                  const totalGcashRevenue = gcashFromSales + gcashFromLogbook + gcashFromRegistrations
                   
                   return (
                     <>
                       <tr>
                         <td colSpan="4" className="text-end fw-bold">Cash Revenue:</td>
-                        <td className="fw-bold">₱{cashRevenue.toFixed(2)}</td>
+                        <td className="fw-bold">₱{totalCashRevenue.toFixed(2)}</td>
                         <td></td>
                       </tr>
                       <tr>
                         <td colSpan="4" className="text-end fw-bold">Gcash Revenue:</td>
-                        <td className="fw-bold">₱{gcashRevenue.toFixed(2)}</td>
+                        <td className="fw-bold">₱{totalGcashRevenue.toFixed(2)}</td>
                         <td></td>
                       </tr>
                       <tr>
