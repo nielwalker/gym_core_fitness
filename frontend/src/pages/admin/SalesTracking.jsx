@@ -5,7 +5,6 @@ import { getTodayLocal, isTodayLocal, formatDateLocal } from '../../lib/dateUtil
 
 function SalesTracking() {
   const [sales, setSales] = useState([])
-  const [stats, setStats] = useState({})
   const [selectedDate, setSelectedDate] = useState(getTodayLocal())
   const [daySales, setDaySales] = useState([])
   const [dayCustomers, setDayCustomers] = useState([])
@@ -16,7 +15,6 @@ function SalesTracking() {
 
   useEffect(() => {
     fetchSales()
-    fetchStats()
     fetchDaySales(selectedDate)
   }, [])
 
@@ -31,15 +29,6 @@ function SalesTracking() {
       setSales(response.data)
     } catch (error) {
       console.error('Error fetching sales:', error)
-    }
-  }
-
-  const fetchStats = async () => {
-    try {
-      const response = await api.get('/stats/sales')
-      setStats(response.data)
-    } catch (error) {
-      console.error('Error fetching stats:', error)
     }
   }
 
@@ -72,16 +61,20 @@ function SalesTracking() {
         <Col md={6}>
           <Card className="bg-success text-white">
             <Card.Body>
-              <Card.Title>Today's Revenue</Card.Title>
-              <h3>₱{stats.todayRevenue?.toFixed(2) || '0.00'}</h3>
+              <Card.Title>
+                {isTodayLocal(selectedDate) ? "Today's Revenue" : `Revenue for ${formatDateLocal(selectedDate)}`}
+              </Card.Title>
+              <h3>₱{dayStats.revenue?.toFixed(2) || '0.00'}</h3>
             </Card.Body>
           </Card>
         </Col>
         <Col md={6}>
           <Card className="bg-primary text-white">
             <Card.Body>
-              <Card.Title>Net Revenue</Card.Title>
-              <h3>₱{stats.todayNetRevenue?.toFixed(2) || stats.todayRevenue?.toFixed(2) || '0.00'}</h3>
+              <Card.Title>
+                {isTodayLocal(selectedDate) ? "Net Revenue" : `Net Revenue for ${formatDateLocal(selectedDate)}`}
+              </Card.Title>
+              <h3>₱{dayStats.netRevenue?.toFixed(2) || dayStats.revenue?.toFixed(2) || '0.00'}</h3>
             </Card.Body>
           </Card>
         </Col>
