@@ -11,6 +11,7 @@ function SalesTracking() {
   const [dayCustomers, setDayCustomers] = useState([])
   const [dayLogbook, setDayLogbook] = useState([])
   const [dayExpenses, setDayExpenses] = useState([])
+  const [dayLockers, setDayLockers] = useState([])
   const [dayStats, setDayStats] = useState({})
 
   useEffect(() => {
@@ -49,6 +50,7 @@ function SalesTracking() {
       setDayCustomers(response.data.customers || [])
       setDayLogbook(response.data.logbook || [])
       setDayExpenses(response.data.expenses || [])
+      setDayLockers(response.data.lockers || [])
       setDayStats(response.data.stats || {})
     } catch (error) {
       console.error('Error fetching day sales:', error)
@@ -56,6 +58,7 @@ function SalesTracking() {
       setDayCustomers([])
       setDayLogbook([])
       setDayExpenses([])
+      setDayLockers([])
       setDayStats({})
     }
   }
@@ -106,7 +109,7 @@ function SalesTracking() {
                 Expenses: ₱{dayStats.expenses?.toFixed(2) || '0.00'} | 
                 Net Revenue: ₱{dayStats.netRevenue?.toFixed(2) || '0.00'} | 
                 Total: {dayStats.count || 0} 
-                ({dayStats.salesCount || 0} Sales, {dayStats.customersCount || 0} Registrations, {dayStats.logbookCount || 0} Log Book)
+                ({dayStats.salesCount || 0} Sales, {dayStats.customersCount || 0} Registrations, {dayStats.logbookCount || 0} Log Book, {dayStats.lockersCount || 0} Lockers)
               </p>
             </Col>
           </Row>
@@ -115,7 +118,7 @@ function SalesTracking() {
 
       <Card>
         <Card.Body>
-          {daySales.length === 0 && dayCustomers.length === 0 && dayLogbook.length === 0 && dayExpenses.length === 0 ? (
+          {daySales.length === 0 && dayCustomers.length === 0 && dayLogbook.length === 0 && dayExpenses.length === 0 && dayLockers.length === 0 ? (
             <Alert variant="info" className="text-center">
               <strong>No sales or expenses recorded for this date</strong>
             </Alert>
@@ -201,12 +204,36 @@ function SalesTracking() {
                   </tr>
                 ))}
                 
+                {/* Locker Registrations */}
+                {dayLockers.map((locker) => (
+                  <tr key={`locker-${locker.id}`}>
+                    <td>{new Date(locker.created_at).toLocaleString()}</td>
+                    <td><span className="badge bg-warning text-dark">Locker</span></td>
+                    <td>
+                      {locker.name} - Locker #{locker.locker_number}
+                      <br />
+                      <small className="text-muted">
+                        Registered: {locker.registered_date ? new Date(locker.registered_date).toLocaleDateString() : 'N/A'} | 
+                        Expires: {locker.expiration_date ? new Date(locker.expiration_date).toLocaleDateString() : 'N/A'}
+                      </small>
+                    </td>
+                    <td>{locker.payment_method || 'Cash'}</td>
+                    <td>₱{parseFloat(locker.amount).toFixed(2)}</td>
+                    <td>
+                      {locker.staff_id && locker.staff ? 
+                        (locker.staff.name || locker.staff.username || locker.staff.email || 'Staff') : 
+                        'Admin'}
+                    </td>
+                  </tr>
+                ))}
+                
                 {/* Expenses */}
                 {dayExpenses.map((expense) => (
                   <tr key={`expense-${expense.id}`}>
                     <td>{new Date(expense.created_at).toLocaleString()}</td>
                     <td><span className="badge bg-danger">Expense</span></td>
                     <td>{expense.name}</td>
+                    <td>{expense.payment_method || '-'}</td>
                     <td className="text-danger">-₱{parseFloat(expense.amount).toFixed(2)}</td>
                     <td>
                       {expense.staff_id && expense.staff ? 
@@ -239,7 +266,12 @@ function SalesTracking() {
                       return sum + amount
                     }, 0)
                   
-                  const totalCashRevenue = cashFromSales + cashFromLogbook + cashFromRegistrations
+                  // 4. Locker Registrations
+                  const cashFromLockers = dayLockers
+                    .filter(locker => locker.payment_method === 'Cash')
+                    .reduce((sum, locker) => sum + parseFloat(locker.amount || 0), 0)
+                  
+                  const totalCashRevenue = cashFromSales + cashFromLogbook + cashFromRegistrations + cashFromLockers
                   
                   // Calculate Gcash revenue from all sources
                   // 1. Product Sales
@@ -262,7 +294,12 @@ function SalesTracking() {
                       return sum + amount
                     }, 0)
                   
-                  const totalGcashRevenue = gcashFromSales + gcashFromLogbook + gcashFromRegistrations
+                  // 4. Locker Registrations
+                  const gcashFromLockers = dayLockers
+                    .filter(locker => locker.payment_method === 'Gcash')
+                    .reduce((sum, locker) => sum + parseFloat(locker.amount || 0), 0)
+                  
+                  const totalGcashRevenue = gcashFromSales + gcashFromLogbook + gcashFromRegistrations + gcashFromLockers
                   
                   return (
                     <>
