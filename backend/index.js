@@ -1396,6 +1396,39 @@ app.get('/api/sales/date', async (req, res) => {
       notesError = null
     }
     
+    // Get lockers for this date
+    let lockers = []
+    let lockersError = null
+    
+    try {
+      const { data: lockersData, error: lockersErr } = await supabase
+        .from('lockers')
+        .select(`
+          *,
+          staff:staff_id (
+            name,
+            username,
+            email
+          )
+        `)
+        .eq('registered_date', dateStr)
+        .order('created_at', { ascending: false })
+      
+      lockers = lockersData || []
+      lockersError = lockersErr
+      
+      // If table doesn't exist, just log and continue with empty lockers
+      if (lockersError && (lockersError.code === '42P01' || lockersError.message?.includes('does not exist'))) {
+        console.warn('Lockers table not found. Please run migration_create_lockers.sql. Continuing without lockers data.')
+        lockers = []
+        lockersError = null
+      }
+    } catch (lockersErr) {
+      console.warn('Error fetching lockers (table may not exist):', lockersErr.message)
+      lockers = []
+      lockersError = null
+    }
+    
     if (salesError || customersError || logbookError) {
       console.error('Error fetching date data:', { salesError, customersError, logbookError })
       return res.status(500).json({ error: 'Failed to fetch date data' })
@@ -1417,7 +1450,8 @@ app.get('/api/sales/date', async (req, res) => {
       return sum + amount
     }, 0)
     const logbookRevenue = (logbook || []).reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0)
-    const totalRevenue = salesRevenue + customerRevenue + logbookRevenue
+    const lockersRevenue = (lockers || []).reduce((sum, locker) => sum + (parseFloat(locker.amount) || 0), 0)
+    const totalRevenue = salesRevenue + customerRevenue + logbookRevenue + lockersRevenue
     
     // Calculate expenses for the date
     const totalExpenses = (expenses || []).reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0)
@@ -1429,6 +1463,7 @@ app.get('/api/sales/date', async (req, res) => {
       logbook: logbook || [],
       expenses: expenses || [],
       notes: notes || [],
+      lockers: lockers || [],
       stats: {
         revenue: totalRevenue,
         expenses: totalExpenses,
@@ -1438,7 +1473,8 @@ app.get('/api/sales/date', async (req, res) => {
         logbookCount: (logbook || []).length,
         expensesCount: (expenses || []).length,
         notesCount: (notes || []).length,
-        count: (sales || []).length + (customers || []).length + (logbook || []).length
+        lockersCount: (lockers || []).length,
+        count: (sales || []).length + (customers || []).length + (logbook || []).length + (lockers || []).length
       }
     })
   } catch (error) {
@@ -1476,6 +1512,30 @@ app.get('/api/stats/sales', async (req, res) => {
       .select('amount')
       .gte('created_at', todayISO)
       .lt('created_at', tomorrowISO)
+    
+    // Get today's locker registrations
+    let todayLockers = []
+    let lockersError = null
+    try {
+      const { data: lockersData, error: lockersErr } = await supabase
+        .from('lockers')
+        .select('amount')
+        .eq('registered_date', todayDateStr)
+      
+      todayLockers = lockersData || []
+      lockersError = lockersErr
+      
+      // If table doesn't exist, just continue with empty lockers
+      if (lockersError && (lockersError.code === '42P01' || lockersError.message?.includes('does not exist'))) {
+        console.warn('Lockers table not found, continuing without lockers')
+        todayLockers = []
+        lockersError = null
+      }
+    } catch (lockersErr) {
+      console.warn('Error fetching lockers (table may not exist):', lockersErr.message)
+      todayLockers = []
+      lockersError = null
+    }
     
     // Get today's expenses
     let todayExpenses = []
@@ -1521,8 +1581,9 @@ app.get('/api/stats/sales', async (req, res) => {
       return sum + amount
     }, 0)
     const logbookRevenue = (todayLogbook || []).reduce((sum, entry) => sum + (parseFloat(entry.amount) || 0), 0)
+    const lockersRevenue = (todayLockers || []).reduce((sum, locker) => sum + (parseFloat(locker.amount) || 0), 0)
     
-    const todayRevenue = salesRevenue + customerRevenue + logbookRevenue
+    const todayRevenue = salesRevenue + customerRevenue + logbookRevenue + lockersRevenue
     const todayExpensesTotal = (todayExpenses || []).reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0)
     const todayNetRevenue = todayRevenue - todayExpensesTotal
     
@@ -1530,7 +1591,8 @@ app.get('/api/stats/sales', async (req, res) => {
       todayRevenue,
       todayExpenses: todayExpensesTotal,
       todayNetRevenue,
-      todaySalesCount: (todaySales || []).length
+      todaySalesCount: (todaySales || []).length,
+      todayLockersCount: (todayLockers || []).length
     })
   } catch (error) {
     console.error('Error:', error)
@@ -2157,6 +2219,253 @@ app.delete('/api/notes/:id', async (req, res) => {
     if (error) {
       console.error('Error deleting note:', error)
       return res.status(500).json({ error: 'Failed to delete note' })
+    }
+    
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// ========== LOCKERS ENDPOINTS ==========
+
+// Get all lockers
+app.get('/api/lockers', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('lockers')
+      .select(`
+        *,
+        staff:staff_id (
+          name,
+          username,
+          email
+        )
+      `)
+      .order('created_at', { ascending: false })
+    
+    if (error) {
+      console.error('Error fetching lockers:', error)
+      if (error.code === '42P01' || error.message?.includes('does not exist')) {
+        return res.status(500).json({ 
+          error: 'Lockers table not found. Please run the migration SQL file: backend/database/migration_create_lockers.sql' 
+        })
+      }
+      return res.status(500).json({ error: 'Failed to fetch lockers', details: error.message })
+    }
+    
+    res.json(data || [])
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error', details: error.message })
+  }
+})
+
+// Create locker registration
+app.post('/api/lockers', async (req, res) => {
+  try {
+    const { name, locker_number, payment_method, amount, staff_id } = req.body
+    
+    if (!name || !locker_number || !payment_method || amount === undefined) {
+      return res.status(400).json({ error: 'Name, locker number, payment method, and amount are required' })
+    }
+    
+    if (payment_method !== 'Cash' && payment_method !== 'Gcash') {
+      return res.status(400).json({ error: 'Payment method must be Cash or Gcash' })
+    }
+    
+    const parsedAmount = parseFloat(amount)
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ error: 'Amount must be a valid positive number' })
+    }
+    
+    // Calculate expiration date (1 month from today)
+    const today = new Date()
+    const registeredDate = today.toISOString().split('T')[0]
+    const expirationDate = new Date(today)
+    expirationDate.setMonth(expirationDate.getMonth() + 1)
+    const expirationDateStr = expirationDate.toISOString().split('T')[0]
+    
+    const insertData = {
+      name: name.trim(),
+      locker_number: locker_number.toString().trim(),
+      payment_method,
+      amount: parsedAmount,
+      registered_date: registeredDate,
+      expiration_date: expirationDateStr,
+      staff_id: staff_id || null
+    }
+    
+    const { data, error } = await supabase
+      .from('lockers')
+      .insert(insertData)
+      .select(`
+        *,
+        staff:staff_id (
+          name,
+          username,
+          email
+        )
+      `)
+      .single()
+    
+    if (error) {
+      console.error('Error creating locker:', error)
+      if (error.code === '42P01' || error.message?.includes('does not exist')) {
+        return res.status(500).json({ 
+          error: 'Lockers table not found. Please run the migration SQL file: backend/database/migration_create_lockers.sql' 
+        })
+      }
+      return res.status(500).json({ error: 'Failed to create locker registration', details: error.message })
+    }
+    
+    res.json(data)
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error', details: error.message })
+  }
+})
+
+// Update locker
+app.put('/api/lockers/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { name, locker_number, payment_method, amount, registered_date, expiration_date } = req.body
+    
+    const updateData = {}
+    if (name !== undefined) updateData.name = name.trim()
+    if (locker_number !== undefined) updateData.locker_number = locker_number.toString().trim()
+    if (payment_method !== undefined) {
+      if (payment_method !== 'Cash' && payment_method !== 'Gcash') {
+        return res.status(400).json({ error: 'Payment method must be Cash or Gcash' })
+      }
+      updateData.payment_method = payment_method
+    }
+    if (amount !== undefined) {
+      const parsedAmount = parseFloat(amount)
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ error: 'Amount must be a valid positive number' })
+      }
+      updateData.amount = parsedAmount
+    }
+    if (registered_date !== undefined) updateData.registered_date = registered_date
+    if (expiration_date !== undefined) updateData.expiration_date = expiration_date
+    
+    const { data, error } = await supabase
+      .from('lockers')
+      .update(updateData)
+      .eq('id', id)
+      .select(`
+        *,
+        staff:staff_id (
+          name,
+          username,
+          email
+        )
+      `)
+      .single()
+    
+    if (error) {
+      console.error('Error updating locker:', error)
+      return res.status(500).json({ error: 'Failed to update locker', details: error.message })
+    }
+    
+    res.json(data)
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Renew locker (extend expiration by 1 month)
+app.put('/api/lockers/:id/renew', async (req, res) => {
+  try {
+    const { id } = req.params
+    const { payment_method, amount, staff_id } = req.body
+    
+    // Get current locker
+    const { data: locker, error: fetchError } = await supabase
+      .from('lockers')
+      .select('*')
+      .eq('id', id)
+      .single()
+    
+    if (fetchError || !locker) {
+      return res.status(404).json({ error: 'Locker not found' })
+    }
+    
+    // Calculate new expiration date (1 month from current expiration or today, whichever is later)
+    const currentExpiration = new Date(locker.expiration_date)
+    const today = new Date()
+    const baseDate = currentExpiration > today ? currentExpiration : today
+    const newExpiration = new Date(baseDate)
+    newExpiration.setMonth(newExpiration.getMonth() + 1)
+    const newExpirationStr = newExpiration.toISOString().split('T')[0]
+    
+    const updateData = {
+      expiration_date: newExpirationStr
+    }
+    
+    // Update payment info if provided
+    if (payment_method) {
+      if (payment_method !== 'Cash' && payment_method !== 'Gcash') {
+        return res.status(400).json({ error: 'Payment method must be Cash or Gcash' })
+      }
+      updateData.payment_method = payment_method
+    }
+    
+    if (amount !== undefined) {
+      const parsedAmount = parseFloat(amount)
+      if (isNaN(parsedAmount) || parsedAmount <= 0) {
+        return res.status(400).json({ error: 'Amount must be a valid positive number' })
+      }
+      updateData.amount = parsedAmount
+    }
+    
+    if (staff_id) {
+      updateData.staff_id = staff_id
+    }
+    
+    const { data, error } = await supabase
+      .from('lockers')
+      .update(updateData)
+      .eq('id', id)
+      .select(`
+        *,
+        staff:staff_id (
+          name,
+          username,
+          email
+        )
+      `)
+      .single()
+    
+    if (error) {
+      console.error('Error renewing locker:', error)
+      return res.status(500).json({ error: 'Failed to renew locker', details: error.message })
+    }
+    
+    res.json(data)
+  } catch (error) {
+    console.error('Error:', error)
+    res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// Delete locker
+app.delete('/api/lockers/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+    
+    const { error } = await supabase
+      .from('lockers')
+      .delete()
+      .eq('id', id)
+    
+    if (error) {
+      console.error('Error deleting locker:', error)
+      return res.status(500).json({ error: 'Failed to delete locker' })
     }
     
     res.json({ success: true })

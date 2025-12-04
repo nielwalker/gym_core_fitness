@@ -93,6 +93,15 @@ function Sidebar({ user, onCollapseChange }) {
           {!isCollapsed && <span>Dashboard</span>}
         </Nav.Link>
         
+        {userRole === 'admin' && (
+          <Nav.Link 
+            className={`sidebar-link ${isActive('/admin/lockers') ? 'active' : ''}`}
+            onClick={() => navigate('/admin/lockers')}
+          >
+            {!isCollapsed && <span>Locker</span>}
+          </Nav.Link>
+        )}
+        
         {userRole === 'staff' && (
           <>
             <Nav.Link 
