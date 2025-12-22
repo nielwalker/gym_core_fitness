@@ -89,6 +89,25 @@ function SalesManagement() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    
+    // Validate stock before submitting
+    if (!selectedProduct) {
+      setError('Please select a product')
+      return
+    }
+
+    const quantityNum = parseInt(formData.quantity)
+    if (isNaN(quantityNum) || quantityNum <= 0) {
+      setError('Quantity must be a positive number')
+      return
+    }
+
+    const availableStock = selectedProduct.stock_quantity || 0
+    if (availableStock < quantityNum) {
+      setError(`Insufficient stock. Available: ${availableStock}, Requested: ${quantityNum}`)
+      return
+    }
+
     setLoading(true)
     setError('')
     setSuccess('')
@@ -99,6 +118,7 @@ function SalesManagement() {
 
       await api.post('/sales', {
         ...formData,
+        quantity: quantityNum,
         total_amount: totalAmount,
         staff_id: user.id,
         payment_method: formData.payment_method || 'Cash'
@@ -232,16 +252,23 @@ function SalesManagement() {
                 required
               >
                 <option value="">Select a product</option>
-                {products.filter(p => p.stock_quantity > 0).map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.name} - ₱{product.price} (Stock: {product.stock_quantity})
+                {products.map((product) => (
+                  <option 
+                    key={product.id} 
+                    value={product.id}
+                    disabled={product.stock_quantity === 0}
+                  >
+                    {product.name} - ₱{product.price} {product.stock_quantity === 0 ? '(Out of Stock)' : `(Stock: ${product.stock_quantity})`}
                   </option>
                 ))}
               </Form.Select>
             </Form.Group>
             {selectedProduct && (
-              <Alert variant="info">
+              <Alert variant={selectedProduct.stock_quantity === 0 ? "danger" : selectedProduct.stock_quantity < 5 ? "warning" : "info"}>
                 Available Stock: {selectedProduct.stock_quantity}
+                {selectedProduct.stock_quantity === 0 && (
+                  <><br /><strong className="text-danger">⚠️ Out of Stock</strong></>
+                )}
               </Alert>
             )}
             <Form.Group className="mb-3">
@@ -249,12 +276,28 @@ function SalesManagement() {
               <Form.Control
                 type="number"
                 min="1"
-                max={selectedProduct?.stock_quantity || 1}
+                max={selectedProduct?.stock_quantity || 0}
                 name="quantity"
                 value={formData.quantity}
-                onChange={handleChange}
+                onChange={(e) => {
+                  const val = e.target.value
+                  const maxStock = selectedProduct?.stock_quantity || 0
+                  if (val === '' || (parseInt(val) >= 1 && parseInt(val) <= maxStock)) {
+                    handleChange(e)
+                  }
+                }}
                 required
               />
+              {selectedProduct && selectedProduct.stock_quantity === 0 && (
+                <Form.Text className="text-danger">
+                  This product is out of stock
+                </Form.Text>
+              )}
+              {selectedProduct && parseInt(formData.quantity) > (selectedProduct.stock_quantity || 0) && (
+                <Form.Text className="text-danger">
+                  Quantity cannot exceed available stock ({selectedProduct.stock_quantity})
+                </Form.Text>
+              )}
             </Form.Group>
             <Form.Group className="mb-3">
               <Form.Label>Payment Method *</Form.Label>
@@ -273,8 +316,19 @@ function SalesManagement() {
                 <strong>Total: ₱{calculateTotal()}</strong>
               </Alert>
             )}
-            <Button variant="primary" type="submit" disabled={loading} className="w-100">
-              {loading ? 'Processing...' : 'Process Sale'}
+            <Button 
+              variant="primary" 
+              type="submit" 
+              disabled={
+                loading || 
+                !selectedProduct || 
+                selectedProduct.stock_quantity === 0 || 
+                parseInt(formData.quantity) > (selectedProduct.stock_quantity || 0) ||
+                parseInt(formData.quantity) <= 0
+              } 
+              className="w-100"
+            >
+              {loading ? 'Processing...' : selectedProduct && selectedProduct.stock_quantity === 0 ? 'Out of Stock' : 'Process Sale'}
             </Button>
           </Form>
         </Modal.Body>

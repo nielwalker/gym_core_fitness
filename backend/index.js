@@ -882,6 +882,32 @@ app.put('/api/customers/:id', async (req, res) => {
     const { id } = req.params
     const updateData = req.body
     
+    // Get current customer data to check if amount or payment_method is changing
+    const { data: currentCustomer, error: fetchError } = await supabase
+      .from('customers')
+      .select('amount, payment_method, partial_amount')
+      .eq('id', id)
+      .single()
+    
+    if (fetchError) {
+      console.error('Error fetching current customer:', fetchError)
+      return res.status(500).json({ error: 'Failed to fetch customer data' })
+    }
+    
+    // Check if amount or payment_method is being changed
+    const amountChanged = updateData.amount !== undefined && 
+      parseFloat(updateData.amount || 0) !== parseFloat(currentCustomer?.amount || 0)
+    const partialAmountChanged = updateData.partial_amount !== undefined && 
+      parseFloat(updateData.partial_amount || 0) !== parseFloat(currentCustomer?.partial_amount || 0)
+    const paymentMethodChanged = updateData.payment_method !== undefined && 
+      updateData.payment_method !== currentCustomer?.payment_method
+    
+    // If amount, partial_amount, or payment_method changed, update created_at to today
+    // so it appears in today's sales tracking
+    if (amountChanged || partialAmountChanged || paymentMethodChanged) {
+      updateData.created_at = new Date().toISOString()
+    }
+    
     const { data, error } = await supabase
       .from('customers')
       .update(updateData)
@@ -1089,10 +1115,16 @@ app.post('/api/sales', async (req, res) => {
       return res.status(400).json({ error: 'Product ID, quantity, and total amount are required' })
     }
     
-    // Get product to update stock
+    // Validate quantity
+    const quantityNum = parseInt(quantity)
+    if (isNaN(quantityNum) || quantityNum <= 0) {
+      return res.status(400).json({ error: 'Quantity must be a positive number' })
+    }
+    
+    // Get product to check and update stock
     const { data: product, error: productError } = await supabase
       .from('products')
-      .select('stock_quantity')
+      .select('stock_quantity, name')
       .eq('id', product_id)
       .single()
     
@@ -1100,8 +1132,16 @@ app.post('/api/sales', async (req, res) => {
       return res.status(400).json({ error: 'Product not found' })
     }
     
+    // Check if sufficient stock is available
+    const currentStock = product.stock_quantity || 0
+    if (currentStock < quantityNum) {
+      return res.status(400).json({ 
+        error: `Insufficient stock. Available: ${currentStock}, Requested: ${quantityNum}` 
+      })
+    }
+    
     // Update stock
-    const newStock = (product.stock_quantity || 0) - quantity
+    const newStock = currentStock - quantityNum
     await supabase
       .from('products')
       .update({ stock_quantity: Math.max(0, newStock) })

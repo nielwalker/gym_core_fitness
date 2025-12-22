@@ -9,7 +9,6 @@ import { getTodayLocal, isTodayLocal, formatDateLocal } from '../lib/dateUtils'
 function Dashboard({ user }) {
   const navigate = useNavigate()
   const [userRole, setUserRole] = useState('staff')
-  const [stats, setStats] = useState({})
   const [showSalesModal, setShowSalesModal] = useState(false)
   const [products, setProducts] = useState([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -88,11 +87,7 @@ function Dashboard({ user }) {
       if (user && isHardcodedAdmin(user)) {
         setUserRole('admin')
         try {
-          const [statsResponse, dateResponse] = await Promise.all([
-            api.get('/stats/sales'),
-            api.get(`/sales/date?date=${selectedDate}`)
-          ])
-          setStats(statsResponse.data)
+          const dateResponse = await api.get(`/sales/date?date=${selectedDate}`)
           setTodayCustomers(dateResponse.data.customers || [])
           setTodaySales(dateResponse.data.sales || [])
           setTodayLogbook(dateResponse.data.logbook || [])
@@ -108,12 +103,8 @@ function Dashboard({ user }) {
         const roleResponse = await api.get(`/user/role/${user.id}`)
         setUserRole(roleResponse.data.role)
 
-        // Fetch stats and date data for both admin and staff
-        const [statsResponse, dateResponse] = await Promise.all([
-          api.get('/stats/sales'),
-          api.get(`/sales/date?date=${selectedDate}`)
-        ])
-        setStats(statsResponse.data)
+        // Fetch date data for both admin and staff
+        const dateResponse = await api.get(`/sales/date?date=${selectedDate}`)
         setTodayCustomers(dateResponse.data.customers || [])
         setTodaySales(dateResponse.data.sales || [])
         setTodayLogbook(dateResponse.data.logbook || [])
@@ -266,9 +257,7 @@ function Dashboard({ user }) {
         note: ''
       })
 
-      // Refresh stats and logbook
-      const statsResponse = await api.get('/stats/sales')
-      setStats(statsResponse.data)
+      // Refresh logbook
       fetchDateData(selectedDate)
 
       // Don't auto-close - let user close manually with close icon
@@ -324,9 +313,7 @@ function Dashboard({ user }) {
 
       setSuccess('Logbook entry updated successfully!')
 
-      // Refresh stats and logbook
-      const statsResponse = await api.get('/stats/sales')
-      setStats(statsResponse.data)
+      // Refresh logbook
       fetchDateData(selectedDate)
 
       setTimeout(() => {
@@ -356,9 +343,7 @@ function Dashboard({ user }) {
       await api.delete(`/logbook/${selectedLogbookEntry.id}`)
       setSuccess('Logbook entry deleted successfully!')
 
-      // Refresh stats and logbook
-      const statsResponse = await api.get('/stats/sales')
-      setStats(statsResponse.data)
+      // Refresh logbook
       fetchDateData(selectedDate)
 
       setTimeout(() => {
@@ -415,8 +400,6 @@ function Dashboard({ user }) {
 
       setSuccess('Sale updated successfully!')
       fetchProducts()
-      const statsResponse = await api.get('/stats/sales')
-      setStats(statsResponse.data)
       fetchDateData(selectedDate)
 
       setTimeout(() => {
@@ -446,8 +429,6 @@ function Dashboard({ user }) {
       await api.delete(`/sales/${selectedSale.id}`)
       setSuccess('Sale deleted successfully!')
 
-      const statsResponse = await api.get('/stats/sales')
-      setStats(statsResponse.data)
       fetchDateData(selectedDate)
 
       setTimeout(() => {
@@ -518,8 +499,6 @@ function Dashboard({ user }) {
       })
 
       setSuccess('Customer updated successfully!')
-      const statsResponse = await api.get('/stats/sales')
-      setStats(statsResponse.data)
       fetchDateData(selectedDate)
 
       setTimeout(() => {
@@ -549,8 +528,6 @@ function Dashboard({ user }) {
       await api.delete(`/customers/${selectedCustomer.id}`)
       setSuccess('Customer deleted successfully!')
 
-      const statsResponse = await api.get('/stats/sales')
-      setStats(statsResponse.data)
       fetchDateData(selectedDate)
 
       setTimeout(() => {
@@ -690,6 +667,19 @@ function Dashboard({ user }) {
       return
     }
 
+    // Validate stock before submitting
+    const quantityNum = parseInt(quantity)
+    if (isNaN(quantityNum) || quantityNum <= 0) {
+      setError('Quantity must be a positive number')
+      return
+    }
+
+    const availableStock = selectedProduct.stock_quantity || 0
+    if (availableStock < quantityNum) {
+      setError(`Insufficient stock. Available: ${availableStock}, Requested: ${quantityNum}`)
+      return
+    }
+
     setLoading(true)
     setError('')
     setSuccess('')
@@ -709,7 +699,7 @@ function Dashboard({ user }) {
       await api.post('/sales', {
         customer_id: null,
         product_id: selectedProduct.id,
-        quantity: quantity,
+        quantity: quantityNum,
         total_amount: totalAmount,
         staff_id: staffId,
         payment_method: paymentMethod || 'Cash'
@@ -722,9 +712,7 @@ function Dashboard({ user }) {
       setSearchTerm('')
       fetchProducts()
       
-      // Refresh stats and today's data
-      const statsResponse = await api.get('/stats/sales')
-      setStats(statsResponse.data)
+      // Refresh today's data
       fetchDateData(selectedDate)
       
       // Don't auto-close - let user close manually with close icon
@@ -739,16 +727,6 @@ function Dashboard({ user }) {
   return (
     <Container>
       <h1 className="my-4">Welcome to Gym Core</h1>
-      <Row className="mb-4">
-        <Col md={12}>
-          <Card className="h-100 shadow-sm bg-success text-white">
-            <Card.Body>
-              <Card.Title>Today's Revenue</Card.Title>
-              <h2>₱{stats.todayRevenue?.toFixed(2) || '0.00'}</h2>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
       
       <Row className="mb-4">
         <Col md={6} className="mb-3">
@@ -1441,10 +1419,27 @@ function Dashboard({ user }) {
                   <Form.Control
                     type="number"
                     min="1"
+                    max={selectedProduct.stock_quantity || 0}
                     value={quantity}
-                    onChange={(e) => setQuantity(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      const maxStock = selectedProduct.stock_quantity || 0
+                      if (val === '' || (parseInt(val) >= 1 && parseInt(val) <= maxStock)) {
+                        setQuantity(val)
+                      }
+                    }}
                     required
                   />
+                  {selectedProduct.stock_quantity === 0 && (
+                    <Form.Text className="text-danger">
+                      This product is out of stock
+                    </Form.Text>
+                  )}
+                  {selectedProduct.stock_quantity > 0 && parseInt(quantity) > selectedProduct.stock_quantity && (
+                    <Form.Text className="text-danger">
+                      Quantity cannot exceed available stock ({selectedProduct.stock_quantity})
+                    </Form.Text>
+                  )}
                 </Form.Group>
                 <Form.Group className="mb-3">
                   <Form.Label>Payment Method *</Form.Label>
@@ -1457,10 +1452,13 @@ function Dashboard({ user }) {
                     <option value="Gcash">Gcash</option>
                   </Form.Select>
                 </Form.Group>
-                <Alert variant="info">
+                <Alert variant={selectedProduct.stock_quantity === 0 ? "danger" : selectedProduct.stock_quantity < 5 ? "warning" : "info"}>
                   <strong>Selected Product:</strong> {selectedProduct.name} - ₱{parseFloat(selectedProduct.price).toFixed(2)}
                   <br />
                   <strong>Available Stock:</strong> {selectedProduct.stock_quantity}
+                  {selectedProduct.stock_quantity === 0 && (
+                    <><br /><strong className="text-danger">⚠️ Out of Stock</strong></>
+                  )}
                 </Alert>
                 <Alert variant="success">
                   <strong>Total: ₱{calculateTotal()}</strong>
@@ -1468,8 +1466,19 @@ function Dashboard({ user }) {
               </>
             )}
 
-            <Button variant="primary" type="submit" disabled={loading || !selectedProduct} className="w-100">
-              {loading ? 'Processing...' : 'Process Sale'}
+            <Button 
+              variant="primary" 
+              type="submit" 
+              disabled={
+                loading || 
+                !selectedProduct || 
+                selectedProduct.stock_quantity === 0 || 
+                parseInt(quantity) > (selectedProduct.stock_quantity || 0) ||
+                parseInt(quantity) <= 0
+              } 
+              className="w-100"
+            >
+              {loading ? 'Processing...' : selectedProduct && selectedProduct.stock_quantity === 0 ? 'Out of Stock' : 'Process Sale'}
             </Button>
           </Form>
         </Modal.Body>
