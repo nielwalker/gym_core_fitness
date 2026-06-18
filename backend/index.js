@@ -56,6 +56,32 @@ app.use((req, res, next) => {
 
 app.use(express.json())
 
+const getLocalDateString = (date = new Date()) => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const parseLocalDate = (dateString) => {
+  if (!dateString) return null
+  const [year, month, day] = dateString.split('-').map(Number)
+  if (!year || !month || !day) return null
+  return new Date(year, month - 1, day, 0, 0, 0, 0)
+}
+
+const calculateRenewalExpirationDate = (currentExpirationDate) => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const currentExpiration = parseLocalDate(currentExpirationDate)
+  const baseDate = currentExpiration && currentExpiration >= today ? currentExpiration : today
+  const newExpiration = new Date(baseDate)
+  newExpiration.setMonth(newExpiration.getMonth() + 1)
+
+  return getLocalDateString(newExpiration)
+}
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' })
@@ -841,24 +867,39 @@ app.post('/api/customers/renew', async (req, res) => {
       staff_id
     } = req.body
     
-    // Calculate new expiration date (1 month from today)
-    const expirationDate = new Date()
-    expirationDate.setMonth(expirationDate.getMonth() + 1)
-    const expirationDateStr = expirationDate.toISOString().split('T')[0]
+    if (!customerId) {
+      return res.status(400).json({ error: 'Customer ID is required' })
+    }
+
+    const { data: currentCustomer, error: currentCustomerError } = await supabase
+      .from('customers')
+      .select('*')
+      .eq('id', customerId)
+      .single()
+
+    if (currentCustomerError || !currentCustomer) {
+      console.error('Error fetching customer for renewal:', currentCustomerError)
+      return res.status(404).json({ error: 'Customer not found' })
+    }
+
+    // Active accounts extend from their current expiration date; expired accounts renew from today.
+    const expirationDateStr = calculateRenewalExpirationDate(currentCustomer.expiration_date)
+    const todayStr = getLocalDateString()
     
     const { data, error } = await supabase
       .from('customers')
       .update({
-        name,
-        address,
-        contact_no,
-        payment_method,
-        amount: amount || 0,
-        partial_amount: partial_amount || null,
-        remaining_amount: remaining_amount || 0,
+        name: name ?? currentCustomer.name,
+        address: address ?? currentCustomer.address,
+        contact_no: contact_no ?? currentCustomer.contact_no,
+        payment_method: payment_method ?? currentCustomer.payment_method,
+        amount: amount ?? currentCustomer.amount ?? 0,
+        partial_amount: partial_amount ?? null,
+        remaining_amount: remaining_amount ?? 0,
         expiration_date: expirationDateStr,
-        start_date: new Date().toISOString().split('T')[0],
-        staff_id: staff_id || null
+        start_date: todayStr,
+        created_at: new Date().toISOString(),
+        staff_id: staff_id || currentCustomer.staff_id || null
       })
       .eq('id', customerId)
       .select()

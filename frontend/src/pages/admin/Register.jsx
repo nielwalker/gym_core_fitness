@@ -66,14 +66,14 @@ function Register({ user }) {
           const existingCustomer = checkResponse.data.customer
           const isActive = checkResponse.data.isActive
 
-          // If customer subscription is still active, show notification
-          if (isActive) {
+          // Active Monthly users can renew early; other duplicate registrations stay blocked.
+          if (isActive && customerData.registration_type !== 'Monthly') {
             setError('This user is already Registered and Active')
             setLoading(false)
             return
           }
 
-          // Customer exists but expired - only allow renewal for Monthly registration
+          // Customer exists - allow Monthly renewal even when the account is still active.
           if (customerData.registration_type === 'Monthly') {
             let staffId = null
             if (user && isHardcodedAdmin(user)) {

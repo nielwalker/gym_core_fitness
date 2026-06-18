@@ -1,7 +1,6 @@
 import { Container, Card, Table, Alert, Modal, Button, Form, InputGroup } from 'react-bootstrap'
 import { useState, useEffect } from 'react'
 import api from '../lib/axios'
-import { calculateExpirationDateLocal } from '../lib/dateUtils'
 
 function Users() {
   const [customers, setCustomers] = useState([])
@@ -176,42 +175,43 @@ function Users() {
 
   const handleRenew = async () => {
     if (!selectedCustomer) return
-
-    // Check if account is expired or inactive
-    const expired = isExpired(selectedCustomer.expiration_date)
-    
-    // If account is active and not expired, show message
-    if (!expired) {
-      setError('')
-      setSuccess('This account is Active')
-      setTimeout(() => {
-        setSuccess('')
-      }, 2000)
-      return
-    }
-
-    // If expired, proceed with renewal
+  
     setLoading(true)
     setError('')
     setSuccess('')
 
     try {
-      // Calculate new expiration date (1 month from today)
-      const newExpirationDate = calculateExpirationDateLocal()
-      
-      // Update the customer with new expiration date
-      await api.put(`/customers/${selectedCustomer.id}`, {
-        expiration_date: newExpirationDate,
-        start_date: new Date().toISOString().split('T')[0] // Update start date to today
+      let amount = 0
+      let partialAmount = null
+      let remainingAmount = 0
+
+      if (editData.payment_method === 'Partial') {
+        amount = parseFloat(editData.amount || 0)
+        partialAmount = parseFloat(editData.partial_amount || 0)
+        remainingAmount = amount - partialAmount
+      } else if (editData.payment_method === 'Cash' || editData.payment_method === 'Gcash') {
+        amount = parseFloat(editData.amount || 0)
+      }
+
+      const response = await api.post('/customers/renew', {
+        customerId: selectedCustomer.id,
+        name: editData.name,
+        address: editData.address,
+        contact_no: editData.contact_no,
+        payment_method: editData.payment_method,
+        amount: amount,
+        partial_amount: partialAmount,
+        remaining_amount: remainingAmount
       })
       
-      setSuccess('Account renewed successfully! Expiration date updated.')
+      setSuccess('Account renewed successfully! Renewal added to today\'s sales.')
       fetchCustomers()
       
-      // Update the editData to reflect the new expiration date
+      const renewedCustomer = response.data
+      setSelectedCustomer(renewedCustomer)
       setEditData({
         ...editData,
-        expiration_date: newExpirationDate
+        expiration_date: renewedCustomer.expiration_date || editData.expiration_date
       })
       
       setTimeout(() => {

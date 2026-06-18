@@ -173,13 +173,13 @@ function CustomerRegistration() {
           const existingCustomer = checkResponse.data.customer
           const isActive = checkResponse.data.isActive
 
-          if (isActive) {
+          if (isActive && customerData.registration_type !== 'Monthly') {
             setError('This user is already Registered and Active')
             setLoading(false)
             return
           }
 
-          // Customer exists but expired - allow renewal for Monthly registration
+          // Customer exists - allow Monthly renewal even when the account is still active.
           if (customerData.registration_type === 'Monthly') {
             const { data: { user: currentUser } } = await supabase.auth.getUser()
             const staffId = currentUser?.id || user?.id
